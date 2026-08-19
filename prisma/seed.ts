@@ -1,8 +1,8 @@
 /**
  * Prisma seed script.
- * Run with: yarn prisma:seed
+ * Run with: npx prisma db seed
  *
- * Seeds default roles and an admin user.
+ * Seeds default roles (user, content_admin, system_admin) and initial admin user.
  */
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
@@ -10,28 +10,29 @@ import * as bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 const DEFAULT_ROLES = [
-  { id: 1, name: 'ADMIN', description: 'Full system access' },
-  { id: 2, name: 'USER', description: 'Standard user access' },
+  { id: 1, name: 'user', description: 'Standard user access' },
+  { id: 2, name: 'content_admin', description: 'Content Administrator for managing opportunities' },
+  { id: 3, name: 'system_admin', description: 'Full system administrator access' },
 ];
 
 const DEFAULT_ADMIN = {
-  email: 'admin@example.com',
-  password: 'password123',
-  firstName: 'Admin',
-  lastName: 'User',
+  email: 'admin@levora.app',
+  password: 'AdminPassword123!',
+  firstName: 'System',
+  lastName: 'Admin',
 };
 
 async function main() {
-  console.log('🌱 Seeding...\n');
+  console.log('🌱 Seeding database...\n');
 
   // ── Roles ──────────────────────────────────
   for (const role of DEFAULT_ROLES) {
     await prisma.roles.upsert({
       where: { id: role.id },
-      update: {},
+      update: { name: role.name, description: role.description },
       create: role,
     });
-    console.log(`  ✔ Role: ${role.name}`);
+    console.log(`  ✔ Role: ${role.name} (ID: ${role.id})`);
   }
 
   // ── Admin user ─────────────────────────────
@@ -50,16 +51,23 @@ async function main() {
         password: hashedPassword,
         firstName: DEFAULT_ADMIN.firstName,
         lastName: DEFAULT_ADMIN.lastName,
+        isEmailVerified: true,
+        userProfile: {
+          create: {
+            fullName: `${DEFAULT_ADMIN.firstName} ${DEFAULT_ADMIN.lastName}`,
+            isDraft: false,
+            completionPct: 100,
+          },
+        },
       },
       select: { id: true, email: true },
     });
 
     await prisma.userRoles.create({
-      data: { userId: user.id, roleId: 1 },
+      data: { userId: user.id, roleId: 3 }, // system_admin
     });
 
     console.log(`\n  ✔ Admin created: ${user.email} (${user.id})`);
-    console.log(`    Password: ${DEFAULT_ADMIN.password}`);
   }
 
   console.log('\n✅ Seed complete!');

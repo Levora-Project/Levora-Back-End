@@ -7,9 +7,29 @@ export const USER_SELECT = {
   email: true,
   firstName: true,
   lastName: true,
+  isEmailVerified: true,
   isActive: true,
+  lastLoginAt: true,
   createdAt: true,
   updatedAt: true,
+  deletedAt: true,
+  userProfile: {
+    select: {
+      fullName: true,
+      completionPct: true,
+      isDraft: true,
+    },
+  },
+  userRoles: {
+    where: { isActive: true },
+    select: {
+      roles: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  },
 } satisfies Prisma.UsersSelect;
 
 @Injectable()
@@ -23,9 +43,9 @@ export class UsersRepository {
     });
   }
 
-  findByEmailRaw(
+  findByEmailRaw<T extends Omit<Prisma.UsersFindUniqueArgs, 'where'>>(
     email: string,
-    args?: Omit<Prisma.UsersFindUniqueArgs, 'where'>,
+    args?: T,
   ) {
     return this.prisma.users.findUnique({
       where: { email },
@@ -50,7 +70,9 @@ export class UsersRepository {
     });
   }
 
-  findUniqueRaw<T extends Prisma.UsersFindUniqueArgs>(args: T) {
+  findUniqueRaw<T extends Prisma.UsersFindUniqueArgs>(
+    args: Prisma.SelectSubset<T, Prisma.UsersFindUniqueArgs>,
+  ): Prisma.Prisma__UsersClient<Prisma.UsersGetPayload<T> | null, null> {
     return this.prisma.users.findUnique(args);
   }
 
@@ -88,6 +110,17 @@ export class UsersRepository {
     return this.prisma.users.delete({
       where: { id },
       select: USER_SELECT,
+    });
+  }
+
+  createProfile(userId: string, fullName?: string) {
+    return this.prisma.userProfiles.create({
+      data: {
+        userId,
+        fullName,
+        isDraft: true,
+        completionPct: 0,
+      },
     });
   }
 }

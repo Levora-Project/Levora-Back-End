@@ -70,7 +70,7 @@ export class SuccessResponse<T = unknown> {
   @ApiPropertyOptional({ nullable: true })
   meta: MetaWithPagination | null;
 
-  @ApiProperty({ nullable: true, example: null })
+  @ApiProperty({ nullable: true, example: null, type: Object })
   errors: null;
 
   @ApiProperty({ example: '2026-04-22T00:00:00+00:00' })
@@ -93,7 +93,7 @@ export class PaginatedResponse<T = unknown> {
   @ApiProperty({ type: MetaWithPagination })
   meta: MetaWithPagination;
 
-  @ApiProperty({ nullable: true, example: null })
+  @ApiProperty({ nullable: true, example: null, type: Object })
   errors: null;
 
   @ApiProperty({ example: '2026-04-22T00:00:00+00:00' })
@@ -114,10 +114,10 @@ export class ErrorResponse {
   @ApiProperty({ example: 'User not found' })
   message: string;
 
-  @ApiProperty({ nullable: true, example: null })
+  @ApiProperty({ nullable: true, example: null, type: Object })
   data: null;
 
-  @ApiProperty({ nullable: true, example: null })
+  @ApiProperty({ nullable: true, example: null, type: Object })
   meta: null;
 
   @ApiProperty({ type: [ApiErrorItem] })

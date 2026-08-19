@@ -38,8 +38,12 @@ function isPaginated(value: unknown): value is PaginatedShape {
 }
 
 function getAutoMessage(method: string, statusCode: number): string {
-  if (statusCode === 201) return 'Created successfully';
-  if (method === 'PATCH' || method === 'PUT') return 'Updated successfully';
+  if (statusCode === 201) {
+    return 'Created successfully';
+  }
+  if (method === 'PATCH' || method === 'PUT') {
+    return 'Updated successfully';
+  }
   return 'OK';
 }
 

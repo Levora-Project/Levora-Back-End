@@ -1,6 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { CacheModule } from '@nestjs/cache-manager';
+import { CacheModule, CacheManagerOptions } from '@nestjs/cache-manager';
 import { BullModule } from '@nestjs/bullmq';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -220,7 +220,7 @@ import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
               store: new CacheableMemory({ ttl: 60000, lruSize: 5000 }),
             }),
             new KeyvRedis(redisUrl),
-          ],
+          ] as CacheManagerOptions['stores'],
         };
       },
     }),

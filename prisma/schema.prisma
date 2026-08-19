@@ -1,10 +1,6 @@
-// ──────────────────────────────────────────────
-// Prisma Schema — Template
-// ──────────────────────────────────────────────
-// Minimal schema for auth + users example.
-// Add your own models below and run:
-//   yarn prisma:migrate:dev
-// ──────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────
+// Levora Database Schema — v1.2 (متوافق مع قالب NestJS)
+// ──────────────────────────────────────────────────────────────
 
 generator client {
   provider = "prisma-client-js"
@@ -15,37 +11,56 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ── Users ──────────────────────────────────────
+// ============================================================
+// 1. Users & Authentication
+// ============================================================
+
 model Users {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email     String    @unique @db.VarChar(255)
-  password  String?
-  firstName String?   @map("first_name") @db.VarChar(255)
-  lastName  String?   @map("last_name") @db.VarChar(255)
-  isActive  Boolean   @default(true) @map("is_active")
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email            String    @unique @db.Citext
+  password         String?   @db.Text
+  firstName        String?   @map("first_name") @db.VarChar(255)
+  lastName         String?   @map("last_name") @db.VarChar(255)
 
-  userRoles UserRoles[]
+  isEmailVerified  Boolean   @default(false) @map("is_email_verified")
+  isActive         Boolean   @default(true) @map("is_active")
+  lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(6)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
 
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  userRoles        UserRoles[]
+  userProfile      UserProfiles?
+  userEducations   UserEducations[]
+  userSkills       UserSkills[]
+  userLanguages    UserLanguages[]
+  oauthIdentities  OauthIdentities[]
+  documents        Documents[]
+  savedOpportunities SavedOpportunities[]
+  applications     Applications[]
+  notifications    Notifications[]
+  subscription     Subscriptions?
+  payments         Payments[]
+
+  @@index([deletedAt])
   @@map("users")
 }
 
-// ── Roles ──────────────────────────────────────
 model Roles {
   id          Int       @id @default(autoincrement())
   name        String    @unique @db.VarChar(100)
-  description String?
+  description String?   @db.VarChar(255)
   isActive    Boolean   @default(true) @map("is_active")
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  userRoles UserRoles[]
+  userRoles   UserRoles[]
 
   @@map("roles")
 }
 
-// ── User Roles (join table) ────────────────────
 model UserRoles {
   id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId    String    @map("user_id") @db.Uuid
@@ -54,8 +69,338 @@ model UserRoles {
   createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user  Users @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roles Roles @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user      Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles     Roles     @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
+  @@index([userId, roleId])
+  @@index([roleId])
   @@map("user_roles")
+}
+
+model OauthIdentities {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  provider        String    @db.Text
+  providerUserId  String    @map("provider_user_id") @db.Text
+  accessTokenRef  String?   @map("access_token_ref") @db.Text
+  refreshTokenRef String?   @map("refresh_token_ref") @db.Text
+  linkedAt        DateTime  @default(now()) @map("linked_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user            Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+  @@map("oauth_identities")
+}
+
+// ============================================================
+// 2. User Profiles & Attributes
+// ============================================================
+
+model UserProfiles {
+  userId          String    @id @map("user_id") @db.Uuid
+  fullName        String?   @map("full_name") @db.Text
+  dateOfBirth     DateTime? @map("date_of_birth") @db.Date
+  nationality     String?   @db.Text
+  educationLevel  String?   @map("education_level") @db.Text
+  fieldOfStudy    String[]  @map("field_of_study") @db.Text
+  currentCountry  String?   @map("current_country") @db.Text
+  currentCity     String?   @map("current_city") @db.Text
+  phone           String?   @db.Text
+  experienceLevel String?   @map("experience_level") @db.Text
+  hasFinancialNeed Boolean? @map("has_financial_need")
+  careerGoals     String?   @map("career_goals") @db.VarChar(500)
+  profilePhotoUrl String?   @map("profile_photo_url") @db.Text
+  completionPct   Int       @default(0) @map("completion_pct")
+  preferences     Json      @default("{}")
+  isDraft         Boolean   @default(true) @map("is_draft")
+
+  matchingVersion Int       @default(1) @map("matching_version")
+
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user            Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([matchingVersion])
+  @@map("user_profiles")
+}
+
+model UserEducations {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  degree            String    @db.Text
+  major             String    @db.Text
+  institution       String    @db.Text
+  graduationYear    Int?      @map("graduation_year")
+  gpaRaw            Decimal?  @map("gpa_raw") @db.Decimal(5,2)
+  gpaRawScale       Decimal?  @map("gpa_raw_scale") @db.Decimal(4,2)
+  gpaNormalized4    Decimal?  @map("gpa_normalized_4") @db.Decimal(3,2)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user              Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@map("user_educations")
+}
+
+model SkillsMaster {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name     String   @unique @db.Citext
+  category String   @db.Text
+
+  userSkills UserSkills[]
+
+  @@map("skills_master")
+}
+
+model UserSkills {
+  userId      String   @map("user_id") @db.Uuid
+  skillId     String   @map("skill_id") @db.Uuid
+  proficiency Int?    @db.SmallInt
+
+  user        Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skill       SkillsMaster @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([userId, skillId])
+  @@map("user_skills")
+}
+
+model LanguagesMaster {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.Citext
+
+  userLanguages UserLanguages[]
+
+  @@map("languages_master")
+}
+
+model UserLanguages {
+  userId       String   @map("user_id") @db.Uuid
+  languageId   String   @map("language_id") @db.Uuid
+  proficiency  String   @db.Text
+
+  user         Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language     LanguagesMaster @relation(fields: [languageId], references: [id], onDelete: Cascade)
+
+  @@id([userId, languageId])
+  @@map("user_languages")
+}
+
+// ============================================================
+// 3. Documents
+// ============================================================
+
+model Documents {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  docType      String    @map("doc_type") @db.Text
+  displayName  String    @map("display_name") @db.Text
+  storagePath  String    @map("storage_path") @db.Text
+  mimeType     String    @map("mime_type") @db.Text
+  sizeBytes    Int       @map("size_bytes")
+  isEncrypted  Boolean   @default(true) @map("is_encrypted")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  user         Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applicationDocuments ApplicationDocuments[]
+
+  @@index([userId])
+  @@map("documents")
+}
+
+// ============================================================
+// 4. Opportunities
+// ============================================================
+
+model Opportunities {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  sourceId        String?   @map("source_id") @db.Uuid
+  title           String    @db.Text
+  organization    String    @db.Text
+  oppType         String    @map("opp_type") @db.Text
+  description     String    @db.Text
+  eligibility     Json      @default("{}")
+  location        String?   @db.Text
+  isRemote        Boolean   @default(false) @map("is_remote")
+  fundingStatus   String?   @map("funding_status") @db.Text
+  deadline        DateTime? @db.Date
+  closedAt        DateTime? @map("closed_at") @db.Timestamptz(6)
+  sourceLink      String    @map("source_link") @db.Text
+  status          String    @default("pending") @db.Text
+  rejectionReason String?   @map("rejection_reason") @db.Text
+  searchVector    Unsupported("tsvector")? @map("search_vector")
+
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  savedOpportunities SavedOpportunities[]
+  applications     Applications[]
+
+  @@index([oppType, location])
+  @@index([status, deadline])
+  @@index([sourceId])
+  @@map("opportunities")
+}
+
+model SavedOpportunities {
+  userId        String    @map("user_id") @db.Uuid
+  opportunityId String    @map("opportunity_id") @db.Uuid
+  savedAt       DateTime  @default(now()) @map("saved_at") @db.Timestamptz(6)
+
+  user          Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity   Opportunities @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+
+  @@id([userId, opportunityId])
+  @@map("saved_opportunities")
+}
+
+// ============================================================
+// 5. Applications & Reminders
+// ============================================================
+
+model Applications {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  opportunityId  String    @map("opportunity_id") @db.Uuid
+  status         String    @default("not_started") @db.Text
+  progressPct    Int       @default(0) @map("progress_pct")
+  submittedAt    DateTime? @map("submitted_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  user           Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunity    Opportunities @relation(fields: [opportunityId], references: [id], onDelete: Restrict)
+
+  statusHistory  ApplicationStatusHistory[]
+  applicationDocuments ApplicationDocuments[]
+  reminders      Reminders[]
+
+  @@unique([userId, opportunityId, deletedAt])
+  @@index([userId, status])
+  @@index([opportunityId])
+  @@index([submittedAt])
+  @@map("applications")
+}
+
+model ApplicationStatusHistory {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId  String    @map("application_id") @db.Uuid
+  oldStatus      String?   @map("old_status") @db.Text
+  newStatus      String    @map("new_status") @db.Text
+  changedBy      String?   @map("changed_by") @db.Uuid
+  changedAt      DateTime  @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  application    Applications @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([changedAt])
+  @@map("application_status_history")
+}
+
+model ApplicationDocuments {
+  applicationId  String    @map("application_id") @db.Uuid
+  documentId     String    @map("document_id") @db.Uuid
+  itemType       String    @map("item_type") @db.Text
+  linkedAt       DateTime  @default(now()) @map("linked_at") @db.Timestamptz(6)
+
+  application    Applications @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  document       Documents @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@id([applicationId, documentId, itemType])
+  @@map("application_documents")
+}
+
+model Reminders {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  applicationId  String    @map("application_id") @db.Uuid
+  remindAt       DateTime  @map("remind_at") @db.Timestamptz(6)
+  reminderType   String    @default("auto") @map("reminder_type") @db.Text
+  sentAt         DateTime? @map("sent_at") @db.Timestamptz(6)
+  channel        String    @default("email") @db.Text
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  application    Applications @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([remindAt])
+  @@index([sentAt, remindAt])
+  @@map("reminders")
+}
+
+// ============================================================
+// 6. Notifications
+// ============================================================
+
+model Notifications {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  notifType    String    @map("notif_type") @db.Text
+  payload      Json      @default("{}")
+  readAt       DateTime? @map("read_at") @db.Timestamptz(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user         Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+// ============================================================
+// 7. Billing & Subscriptions
+// ============================================================
+
+model Subscriptions {
+  userId               String    @id @map("user_id") @db.Uuid
+  plan                 String    @default("free") @db.Text
+  billingCycle         String?   @map("billing_cycle") @db.Text
+  status               String    @default("active") @db.Text
+  stripeCustomerId     String?   @map("stripe_customer_id") @db.Text
+  stripeSubscriptionId String?   @map("stripe_subscription_id") @db.Text
+  currentPeriodEnd     DateTime? @map("current_period_end") @db.Timestamptz(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user                 Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([stripeSubscriptionId])
+  @@map("subscriptions")
+}
+
+model Payments {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  amountCents        Int       @map("amount_cents")
+  currency           String    @default("USD") @db.Char(3)
+  status             String    @db.Text
+  stripePaymentId    String    @unique @map("stripe_payment_id") @db.Text
+  paidAt             DateTime? @map("paid_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user               Users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+// ============================================================
+// 8. Audit Log
+// ============================================================
+
+model ChangeLog {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tableName   String    @map("table_name") @db.Text
+  recordId    String    @map("record_id") @db.Uuid
+  action      String    @db.Text
+  oldData     Json?     @map("old_data")
+  newData     Json?     @map("new_data")
+  changedBy   String?   @map("changed_by") @db.Uuid
+  changedAt   DateTime  @default(now()) @map("changed_at") @db.Timestamptz(6)
+
+  @@index([tableName, recordId])
+  @@map("change_log")
 }

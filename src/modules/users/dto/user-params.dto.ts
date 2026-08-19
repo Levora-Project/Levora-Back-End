@@ -1,12 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsUUID, IsNotEmpty } from 'class-validator';
 
 export class UserParamsDto {
   @ApiProperty({
-    description: 'User ID (cuid)',
-    example: 'cm1a2b3c4d5e6f7g8h9i0',
+    description: 'User ID (UUID)',
+    example: '9dd10e8f-0f3c-4295-befb-6109efd2587f',
   })
-  @IsString()
+  @IsUUID('4', { message: 'id must be a valid UUID' })
   @IsNotEmpty()
   id: string;
 }

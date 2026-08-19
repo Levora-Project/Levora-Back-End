@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, NestMiddleware } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
+import { Cache } from 'cache-manager';
 import { createHash } from 'crypto';
 import { NextFunction, Request, Response } from 'express';
 import { ErrorCode } from '@common/dto';

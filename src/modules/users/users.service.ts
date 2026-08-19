@@ -4,12 +4,6 @@ import { Prisma } from '@prisma/client';
 import { UsersRepository } from './repositories/users.repository';
 import { CreateUserDto, UpdateUserDto, UserQueryDto } from './dto';
 
-/**
- * UsersService – business logic for user management.
- *
- * All database access goes through UsersRepository.
- * When schema changes after db pull, only the repository needs updating.
- */
 @Injectable()
 export class UsersService {
   constructor(
@@ -18,14 +12,68 @@ export class UsersService {
     private readonly repo: UsersRepository,
   ) {}
 
-  async create(dto: CreateUserDto) {
-    this.logger.info(`Creating user: ${dto.email}`);
+  async findByEmail(email: string) {
+    return this.repo.findByEmail(email);
+  }
+
+  async findById(id: string) {
+    const user = await this.repo.findById(id);
+    if (!user) {
+      throw new NotFoundException(`User #${id} not found`);
+    }
+    return user;
+  }
+
+  async createUser(data: {
+    email: string;
+    password?: string;
+    firstName?: string;
+    lastName?: string;
+  }) {
+    this.logger.info(`Creating user: ${data.email}`);
+
+    const fullName =
+      [data.firstName, data.lastName].filter(Boolean).join(' ') || undefined;
+
     const user = await this.repo.create({
-      email: dto.email,
-      firstName: dto.name,
+      email: data.email,
+      password: data.password,
+      firstName: data.firstName,
+      lastName: data.lastName,
+      userProfile: {
+        create: {
+          fullName,
+          isDraft: true,
+          completionPct: 0,
+        },
+      },
+      userRoles: {
+        create: {
+          roleId: 1, // default 'user' role
+        },
+      },
     });
 
     return user;
+  }
+
+  async createProfile(userId: string, fullName?: string) {
+    return this.repo.createProfile(userId, fullName);
+  }
+
+  async getUserWithProfile(id: string) {
+    return this.findById(id);
+  }
+
+  async updateLastLogin(id: string) {
+    return this.repo.update(id, { lastLoginAt: new Date() });
+  }
+
+  async create(dto: CreateUserDto) {
+    return this.createUser({
+      email: dto.email,
+      firstName: dto.name,
+    });
   }
 
   async findAll(query: UserQueryDto) {
@@ -75,16 +123,12 @@ export class UsersService {
   }
 
   async findOne(id: string) {
-    const user = await this.repo.findById(id);
-    if (!user) {
-      throw new NotFoundException(`User #${id} not found`);
-    }
-    return user;
+    return this.findById(id);
   }
 
   async update(id: string, dto: UpdateUserDto) {
     await this.findOne(id);
-    return this.repo.update(id, dto as Prisma.UsersUpdateInput);
+    return this.repo.update(id, dto);
   }
 
   async remove(id: string) {
