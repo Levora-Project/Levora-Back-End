@@ -49,6 +49,7 @@ Thumbs.db
 coverage/
 .nyc_output/
 test/reports/
+test-reports/
 junit.xml
 
 # ============

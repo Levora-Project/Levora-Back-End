@@ -25,7 +25,18 @@ export class PrismaService
   private readonly logger = new Logger(PrismaService.name);
 
   constructor() {
+    let url = process.env.DATABASE_URL;
+    if (
+      url &&
+      (url.includes(':6543') || url.includes('pooler.supabase.com')) &&
+      !url.includes('pgbouncer=true')
+    ) {
+      const separator = url.includes('?') ? '&' : '?';
+      url = `${url}${separator}pgbouncer=true`;
+    }
+
     super({
+      datasources: url ? { db: { url } } : undefined,
       log:
         process.env.NODE_ENV === 'development'
           ? ['query', 'info', 'warn', 'error']

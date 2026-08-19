@@ -9,6 +9,7 @@ import { Keyv } from 'keyv';
 import KeyvRedis from '@keyv/redis';
 import { CacheableMemory } from 'cacheable';
 import { randomUUID } from 'crypto';
+import { KeyvUpstashStore } from './common/cache/keyv-upstash-redis.store';
 import {
   appConfig,
   databaseConfig,
@@ -199,28 +200,47 @@ import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
     // ── Redis ────────────────────────────────────
     RedisModule,
 
-    // ── Caching (Redis-backed via Keyv) ──────────
+    // ── Caching (Environment-aware: Upstash / Keyv / Memory) ──
     CacheModule.registerAsync({
       isGlobal: true,
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
+        const upstashUrl = config.get<string>('redis.UPSTASH_REDIS_REST_URL');
+        const upstashToken = config.get<string>(
+          'redis.UPSTASH_REDIS_REST_TOKEN',
+        );
         const host = config.get<string>('redis.REDIS_HOST', 'localhost');
         const port = config.get<number>('redis.REDIS_PORT', 6379);
         const password = config.get<string>('redis.REDIS_PASSWORD');
         const db = config.get<number>('redis.REDIS_DB', 0);
         const ttl = config.get<number>('redis.CACHE_TTL', 5000);
+        const isVercel = Boolean(process.env.VERCEL);
+        const isProd = config.get<string>('app.NODE_ENV') === 'production';
 
-        const credentials = password ? `:${password}@` : '';
-        const redisUrl = `redis://${credentials}${host}:${port}/${db}`;
+        const stores: CacheManagerOptions['stores'] = [
+          new Keyv({
+            store: new CacheableMemory({ ttl: 60000, lruSize: 5000 }),
+          }),
+        ];
+
+        if (upstashUrl && upstashToken) {
+          stores.push(
+            new Keyv({
+              store: new KeyvUpstashStore({
+                url: upstashUrl,
+                token: upstashToken,
+              }),
+            }),
+          );
+        } else if (!isVercel && !isProd) {
+          const credentials = password ? `:${password}@` : '';
+          const redisUrl = `redis://${credentials}${host}:${port}/${db}`;
+          stores.push(new KeyvRedis(redisUrl));
+        }
 
         return {
           ttl,
-          stores: [
-            new Keyv({
-              store: new CacheableMemory({ ttl: 60000, lruSize: 5000 }),
-            }),
-            new KeyvRedis(redisUrl),
-          ] as CacheManagerOptions['stores'],
+          stores,
         };
       },
     }),
@@ -234,6 +254,9 @@ import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
           port: config.get<number>('redis.REDIS_PORT', 6379),
           password: config.get<string>('redis.REDIS_PASSWORD') || undefined,
           db: config.get<number>('redis.REDIS_DB', 0),
+          lazyConnect: true,
+          enableOfflineQueue: false,
+          maxRetriesPerRequest: null,
         },
       }),
     }),

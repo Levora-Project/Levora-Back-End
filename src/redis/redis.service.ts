@@ -30,20 +30,44 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit(): Promise<void> {
-    this.logger.log('Connecting to Redis...');
-    await this.client.connect();
-    this.logger.log('Redis connected');
+    if (process.env.VERCEL) {
+      this.logger.log(
+        'Running on Vercel: skipping persistent TCP Redis connection.',
+      );
+      return;
+    }
+    try {
+      this.logger.log('Connecting to Redis...');
+      await this.client.connect();
+      this.logger.log('Redis connected');
+    } catch (err) {
+      this.logger.warn(
+        `Failed to connect to Redis: ${(err as Error).message}. Continuing without persistent TCP Redis connection.`,
+      );
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
-    this.logger.log('Disconnecting from Redis...');
-    await this.client.quit();
-    this.logger.log('Redis disconnected');
+    try {
+      if (
+        this.client.status === 'ready' ||
+        this.client.status === 'connecting'
+      ) {
+        this.logger.log('Disconnecting from Redis...');
+        await this.client.quit();
+        this.logger.log('Redis disconnected');
+      }
+    } catch {
+      // Ignore disconnect errors during teardown
+    }
   }
 
   // ── Health Check ─────────────────────────────
   async isHealthy(): Promise<boolean> {
     try {
+      if (this.client.status !== 'ready') {
+        return false;
+      }
       const result = await this.client.ping();
       return result === 'PONG';
     } catch {

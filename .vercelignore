@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build & Test outputs
+dist/
+coverage/
+test-reports/
+logs/
+*.log
+
+# Environment & local secrets
+.env
+.env.*
+!.env.example
+
+# IDE & OS
+.git
+.vscode
+.idea
+.DS_Store
+
+# Cache & temporary files
+.cache/
+tmp/
+temp/

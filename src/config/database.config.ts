@@ -9,8 +9,22 @@ export const databaseConfigSchema = z.object({
 
 export type DatabaseConfig = z.infer<typeof databaseConfigSchema>;
 
+function formatDatabaseUrl(url?: string): string | undefined {
+  if (!url) {
+    return url;
+  }
+  if (
+    (url.includes(':6543') || url.includes('pooler.supabase.com')) &&
+    !url.includes('pgbouncer=true')
+  ) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}pgbouncer=true`;
+  }
+  return url;
+}
+
 export const databaseConfig = () => ({
   database: databaseConfigSchema.parse({
-    DATABASE_URL: process.env.DATABASE_URL,
+    DATABASE_URL: formatDatabaseUrl(process.env.DATABASE_URL),
   }),
 });

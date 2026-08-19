@@ -11,6 +11,7 @@
   },
   "scripts": {
     "build": "prisma generate && nest build",
+    "vercel-build": "prisma generate && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",
@@ -46,6 +47,7 @@
     "@nestjs/terminus": "^11.1.1",
     "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.19.2",
+    "@upstash/redis": "^1.38.2",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.70.4",
     "cache-manager": "^7.2.8",

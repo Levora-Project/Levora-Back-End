@@ -1,16 +1,19 @@
 import { NestFactory, Reflector } from '@nestjs/core';
+import { ExpressAdapter } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import {
   ValidationPipe,
   VersioningType,
   Logger,
   UnprocessableEntityException,
+  INestApplication,
 } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
+import express, { Express, Request, Response } from 'express';
 import { Logger as PinoLogger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from '@common/filters';
@@ -40,24 +43,32 @@ function constraintToErrorCode(constraintKey: string): string {
   return map[constraintKey] ?? ErrorCode.VALIDATION_INVALID_FORMAT;
 }
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+let cachedServer: Express;
+let cachedApp: INestApplication;
+
+async function bootstrapServer(): Promise<{
+  app: INestApplication;
+  server: Express;
+}> {
+  if (cachedApp && cachedServer) {
+    return { app: cachedApp, server: cachedServer };
+  }
+
+  const server = express();
+  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
     bufferLogs: true,
   });
 
   app.useLogger(app.get(PinoLogger));
 
   const config = app.get(ConfigService);
-  const port = config.get<number>('app.PORT', 3000);
   const prefix = config.get<string>('app.API_PREFIX', 'api');
-  const nodeEnv = config.get<string>('app.NODE_ENV', 'development');
 
   app.getHttpAdapter().getInstance().disable('x-powered-by');
   app.use(helmet());
   app.use(compression());
   app.use(cookieParser());
 
-  const express = await import('express');
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
@@ -117,7 +128,6 @@ async function bootstrap() {
     .setVersion('1.2')
     .addBearerAuth()
     .addApiKey({ type: 'apiKey', name: 'X-API-Key', in: 'header' }, 'X-API-Key')
-    .addServer(`http://localhost:${port}`)
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);
@@ -141,13 +151,33 @@ async function bootstrap() {
 
   app.enableShutdownHooks();
 
-  await app.listen(port);
+  await app.init();
+  cachedApp = app;
+  cachedServer = server;
 
-  const logger = new Logger('Bootstrap');
-  logger.log(`🚀 Server running on http://localhost:${port}/${prefix}`);
-  logger.log(`📖 Environment: ${nodeEnv}`);
-  logger.log(`📚 Swagger docs: http://localhost:${port}/api`);
-  logger.log(`📄 Swagger JSON: http://localhost:${port}/api-json`);
+  return { app, server };
 }
 
-void bootstrap();
+// Serverless function handler for Vercel
+export default async function handler(req: Request, res: Response) {
+  const { server } = await bootstrapServer();
+  return server(req, res);
+}
+
+// Standalone server for local development
+if (!process.env.VERCEL) {
+  void bootstrapServer().then(async ({ app }) => {
+    const config = app.get(ConfigService);
+    const port = config.get<number>('app.PORT', 3000);
+    const prefix = config.get<string>('app.API_PREFIX', 'api');
+    const nodeEnv = config.get<string>('app.NODE_ENV', 'development');
+
+    await app.listen(port);
+
+    const logger = new Logger('Bootstrap');
+    logger.log(`🚀 Server running on http://localhost:${port}/${prefix}`);
+    logger.log(`📖 Environment: ${nodeEnv}`);
+    logger.log(`📚 Swagger docs: http://localhost:${port}/api`);
+    logger.log(`📄 Swagger JSON: http://localhost:${port}/api-json`);
+  });
+}
