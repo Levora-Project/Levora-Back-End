@@ -1,0 +1,59 @@
+# Docker Compose for local development
+version: "3.9"
+
+services:
+  # ── PostgreSQL ──────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: ai-hub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_hub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ───────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: ai-hub-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── App (optional – use for integration tests) ──
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: ai-hub-backend
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   environment:
+  #     DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ai_hub?schema=public
+  #     NODE_ENV: development
+  #     PORT: 3000
+  #   ports:
+  #     - '3000:3000'
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

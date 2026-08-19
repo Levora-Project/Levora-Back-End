@@ -1,0 +1,2 @@
+echo "🔎 Linting..."
+npx eslint src/ --quiet

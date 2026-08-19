@@ -1,0 +1,44 @@
+# Dependencies & build output
+node_modules
+dist
+coverage
+.yarn
+
+# Environment & secrets
+.env
+.env.*
+
+# Logs & uploads (runtime data)
+logs
+uploads
+
+# Version control
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# CI/CD
+Jenkinsfile*
+JenkinsFileAnother
+
+# Docker (prevent recursive context)
+docker-compose*
+Dockerfile*
+.dockerignore
+
+# Documentation & tests
+*.md
+!README.md
+test
+docs
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+.VERSION
+.husky

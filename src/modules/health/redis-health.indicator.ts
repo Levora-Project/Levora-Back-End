@@ -1,0 +1,29 @@
+import { Injectable } from '@nestjs/common';
+import {
+  HealthIndicator,
+  HealthIndicatorResult,
+  HealthCheckError,
+} from '@nestjs/terminus';
+import { RedisService } from '@/redis';
+
+/**
+ * Custom health indicator for Redis connectivity.
+ */
+@Injectable()
+export class RedisHealthIndicator extends HealthIndicator {
+  constructor(private readonly redis: RedisService) {
+    super();
+  }
+
+  async isHealthy(key: string): Promise<HealthIndicatorResult> {
+    const isHealthy = await this.redis.isHealthy();
+
+    const result = this.getStatus(key, isHealthy);
+
+    if (isHealthy) {
+      return result;
+    }
+
+    throw new HealthCheckError('Redis check failed', result);
+  }
+}

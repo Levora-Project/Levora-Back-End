@@ -1,0 +1,2 @@
+echo "🔍 Type checking..."
+npx tsc --noEmit
