@@ -1,11 +1,4 @@
-import path from 'path';
 import { NestFactory, Reflector } from '@nestjs/core';
-moduleAlias.addAliases({
-  '@': path.join(__dirname, '..', 'dist'),
-  '@common': path.join(__dirname, '..', 'dist/common'),
-  '@modules': path.join(__dirname, '..', 'dist/modules'),
-  '@config': path.join(__dirname, '..', 'dist/config'),
-});
 
 import { ConfigService } from '@nestjs/config';
 import {
