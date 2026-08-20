@@ -235,7 +235,11 @@ import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
         } else if (!isVercel && !isProd) {
           const credentials = password ? `:${password}@` : '';
           const redisUrl = `redis://${credentials}${host}:${port}/${db}`;
-          stores.push(new KeyvRedis(redisUrl));
+          stores.push(
+            new Keyv({
+              store: new KeyvRedis(redisUrl),
+            }),
+          );
         }
 
         return {
