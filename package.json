@@ -137,9 +137,11 @@
     "seed": "ts-node prisma/seed.ts"
   },
   "_moduleAliases": {
-    "@": "dist/src",
-    "@common": "dist/src/common",
-    "@modules": "dist/src/modules",
-    "@config": "dist/src/config"
+    "@": "dist",
+    "@common": "dist/common",
+    "@modules": "dist/modules",
+    "@config": "dist/config"
   }
 }
+
+
