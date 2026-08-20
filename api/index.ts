@@ -1,3 +1,3 @@
-import handler from '../src/main';
-
-export default handler;
+// api/index.ts
+import 'tsconfig-paths/register';
+export { default } from '../src/main';

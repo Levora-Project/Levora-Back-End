@@ -1,5 +1,4 @@
 import { NestFactory, Reflector } from '@nestjs/core';
-import { ExpressAdapter } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import {
   ValidationPipe,
@@ -43,19 +42,14 @@ function constraintToErrorCode(constraintKey: string): string {
   return map[constraintKey] ?? ErrorCode.VALIDATION_INVALID_FORMAT;
 }
 
-let cachedServer: Express;
 let cachedApp: INestApplication;
 
-async function bootstrapServer(): Promise<{
-  app: INestApplication;
-  server: Express;
-}> {
-  if (cachedApp && cachedServer) {
-    return { app: cachedApp, server: cachedServer };
+export async function bootstrap(): Promise<INestApplication> {
+  if (cachedApp) {
+    return cachedApp;
   }
 
-  const server = express();
-  const app = await NestFactory.create(AppModule, new ExpressAdapter(server), {
+  const app = await NestFactory.create(AppModule, {
     bufferLogs: true,
   });
 
@@ -121,7 +115,6 @@ async function bootstrapServer(): Promise<{
     new TimeoutInterceptor(),
   );
 
-  // ── Swagger ─────────────────────────────────────
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Levora API')
     .setDescription('Levora Intelligent Opportunity Discovery Platform API')
@@ -139,7 +132,6 @@ async function bootstrapServer(): Promise<{
     },
   });
 
-  // Serve swagger JSON at /api-json
   app
     .getHttpAdapter()
     .get(
@@ -153,20 +145,22 @@ async function bootstrapServer(): Promise<{
 
   await app.init();
   cachedApp = app;
-  cachedServer = server;
-
-  return { app, server };
+  return app;
 }
 
-// Serverless function handler for Vercel
+let cachedServer: Express;
+
 export default async function handler(req: Request, res: Response) {
-  const { server } = await bootstrapServer();
-  return server(req, res);
+  if (!cachedServer) {
+    const app = await bootstrap();
+    const adapter = app.getHttpAdapter();
+    cachedServer = adapter.getInstance() as Express;
+  }
+  return cachedServer(req, res);
 }
 
-// Standalone server for local development
 if (!process.env.VERCEL) {
-  void bootstrapServer().then(async ({ app }) => {
+  void bootstrap().then(async (app) => {
     const config = app.get(ConfigService);
     const port = config.get<number>('app.PORT', 3000);
     const prefix = config.get<string>('app.API_PREFIX', 'api');
@@ -175,9 +169,9 @@ if (!process.env.VERCEL) {
     await app.listen(port);
 
     const logger = new Logger('Bootstrap');
-    logger.log(`🚀 Server running on http://localhost:${port}/${prefix}`);
-    logger.log(`📖 Environment: ${nodeEnv}`);
-    logger.log(`📚 Swagger docs: http://localhost:${port}/api`);
-    logger.log(`📄 Swagger JSON: http://localhost:${port}/api-json`);
+    logger.log(`Server running on http://localhost:${port}/${prefix}`);
+    logger.log(`Environment: ${nodeEnv}`);
+    logger.log(`Swagger docs: http://localhost:${port}/api`);
+    logger.log(`Swagger JSON: http://localhost:${port}/api-json`);
   });
 }
