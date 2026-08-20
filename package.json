@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "prisma generate && nest build",
-    "vercel-build": "prisma generate && nest build",
+    "vercel-build": "prisma generate && nest build && npx tsc-alias -p tsconfig.build.json",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

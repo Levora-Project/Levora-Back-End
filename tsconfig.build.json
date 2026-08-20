@@ -1,4 +1,12 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["dist/*"],
+      "@common/*": ["dist/common/*"],
+      "@modules/*": ["dist/modules/*"],
+      "@config/*": ["dist/config/*"]
+    }
+  },
   "exclude": ["node_modules", "test", "dist", "**/*spec.ts", "prisma.config.ts"]
 }
