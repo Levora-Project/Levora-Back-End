@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
+    "outDir": "./dist",
     "paths": {
       "@/*": ["dist/*"],
       "@common/*": ["dist/common/*"],
