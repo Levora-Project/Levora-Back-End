@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../../src/common/utils/datetime.util.ts"],"sourcesContent":["export function toApiDatetime(date: Date): string {\n  return date.toISOString().replace(/\\.\\d{3}Z$/, '+00:00');\n}\n"],"names":["toApiDatetime","date","toISOString","replace"],"mappings":";;;;+BAAgBA;;;eAAAA;;;AAAT,SAASA,cAAcC,IAAU;IACtC,OAAOA,KAAKC,WAAW,GAAGC,OAAO,CAAC,aAAa;AACjD"}

@@ -1,0 +1,1 @@
+{"version":3,"sources":["../../../src/modules/health/index.ts"],"sourcesContent":["export { HealthModule } from './health.module';\n"],"names":["HealthModule"],"mappings":";;;;+BAASA;;;eAAAA,0BAAY;;;8BAAQ"}

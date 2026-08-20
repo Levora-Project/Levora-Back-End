@@ -2,7 +2,6 @@
 # Node.js / NestJS
 # ============
 node_modules/
-dist/
 build/
 coverage/
 *.log
@@ -70,3 +69,4 @@ node_modules/
 node_modules/
 .env
 .env.*
+.env*
