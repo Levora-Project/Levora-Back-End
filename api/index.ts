@@ -1,3 +1,3 @@
 import 'module-alias/register';
-//import 'tsconfig-paths/register';
-export { default } from '../src/main';
+// @ts-ignore
+export { default } from '../dist/main';
