@@ -62,6 +62,7 @@
     "helmet": "^8.1.0",
     "ioredis": "^5.10.0",
     "keyv": "^5.6.0",
+    "module-alias": "^2.3.4",
     "nestjs-pino": "^4.6.0",
     "passport-jwt": "^4.0.1",
     "pino": "^10.3.1",
@@ -86,6 +87,7 @@
     "@types/express": "^5.0.6",
     "@types/ioredis": "^5.0.0",
     "@types/jest": "^29.5.14",
+    "@types/module-alias": "^2.0.4",
     "@types/node": "^22.19.13",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.3",
@@ -133,5 +135,11 @@
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
+  },
+  "_moduleAliases": {
+    "@": "dist/src",
+    "@common": "dist/src/common",
+    "@modules": "dist/src/modules",
+    "@config": "dist/src/config"
   }
 }
