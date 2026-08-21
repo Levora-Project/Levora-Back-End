@@ -108,6 +108,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm prisma:generate
 
+      - name: Enable CITEXT Extension in Test Database
+        run: PGPASSWORD=test_password psql -h localhost -U test_user -d levora_test -c "CREATE EXTENSION IF NOT EXISTS citext;"
+
       - name: Push Schema to Test Database
         run: pnpm exec prisma db push --skip-generate
 
