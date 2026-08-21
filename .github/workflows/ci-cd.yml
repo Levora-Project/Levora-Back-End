@@ -1,0 +1,149 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint-and-format:
+    name: Lint & Format Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+          run_install: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm prisma:generate
+
+      - name: Run ESLint
+        run: pnpm exec eslint "{src,apps,libs,test}/**/*.ts"
+
+      - name: Check Code Formatting (Prettier)
+        run: pnpm exec prettier --check "src/**/*.ts" "test/**/*.ts"
+
+      - name: Verify Build
+        run: pnpm build
+
+  test:
+    name: Unit, Integration & E2E Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: levora_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://test_user:test_password@localhost:5432/levora_test?schema=public
+      DIRECT_URL: postgresql://test_user:test_password@localhost:5432/levora_test?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      PORT: 3000
+      JWT_SECRET: ci-cd-test-jwt-secret-key-minimum-32-chars-long
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+          run_install: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm prisma:generate
+
+      - name: Push Schema to Test Database
+        run: pnpm exec prisma db push --skip-generate
+
+      - name: Run Unit & Integration Tests
+        run: pnpm test -- --passWithNoTests
+
+      - name: Run E2E Tests
+        run: pnpm test:e2e
+
+  deploy:
+    name: Deploy to Render
+    needs: [lint-and-format, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Render Deploy Hook
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "::error::RENDER_DEPLOY_HOOK_URL secret is not set or empty in repository settings."
+            exit 1
+          fi
+
+          echo "Triggering deployment on Render..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "$DEPLOY_HOOK_URL")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Render API Response: $body"
+          echo "HTTP Status Code: $http_code"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "::notice::Deployment hook triggered successfully (HTTP $http_code)."
+          else
+            echo "::error::Render deploy hook failed with HTTP status $http_code: $body"
+            exit 1
+          fi
