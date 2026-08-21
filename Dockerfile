@@ -10,7 +10,7 @@ ENV PNPM_IGNORE_SCRIPTS=true
 # Install deps (copy .npmrc if you have one; pnpm uses pnpm-lock.yaml)
 COPY package.json pnpm-lock.yaml ./
 # COPY .npmrc .npmrc   # uncomment if you have custom npm registry config
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # Generate Prisma client
 COPY prisma ./prisma
@@ -26,7 +26,7 @@ RUN pnpm run build
 # 1. Create prod deps, 2. Copy generated Prisma client into it
 RUN mkdir /prod && cp package.json pnpm-lock.yaml /prod \
   && cd /prod \
-  && pnpm install --prod --frozen-lockfile \
+  && pnpm install --prod --frozen-lockfile --ignore-scripts \
   && cp -r /app/node_modules/.prisma /prod/node_modules/.prisma \
   && cp -r /app/node_modules/@prisma /prod/node_modules/@prisma
 
