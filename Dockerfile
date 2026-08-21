@@ -3,28 +3,28 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 RUN apk add --no-cache openssl libc6-compat
-RUN corepack enable && corepack prepare yarn@4.6.0 --activate
+RUN corepack enable && corepack prepare pnpm@11.22.0 --activate
 
-# Install deps (copy .yarnrc.yml; copy .yarn/ if you pinned yarnPath)
-COPY package.json yarn.lock .yarnrc.yml ./
-# COPY .yarn .yarn   # uncomment if you use yarnPath
-RUN yarn install --immutable
+# Install deps (copy .npmrc if you have one; pnpm uses pnpm-lock.yaml)
+COPY package.json pnpm-lock.yaml ./
+# COPY .npmrc .npmrc   # uncomment if you have custom npm registry config
+RUN pnpm install --frozen-lockfile
 
 # Generate Prisma client
 COPY prisma ./prisma
 COPY scripts ./scripts
 ENV PRISMA_SKIP_POSTINSTALL_GENERATE=1
-RUN yarn prisma:generate
+RUN pnpm prisma:generate
 
 # Build NestJS
 COPY . .
-RUN yarn build
+RUN pnpm run build
 
 # Prepare prod-only node_modules with Prisma client
 # 1. Create prod deps, 2. Copy generated Prisma client into it
-RUN mkdir /prod && cp package.json yarn.lock .yarnrc.yml /prod \
+RUN mkdir /prod && cp package.json pnpm-lock.yaml /prod \
   && cd /prod \
-  && yarn workspaces focus --all --production \
+  && pnpm install --prod --frozen-lockfile \
   && cp -r /app/node_modules/.prisma /prod/node_modules/.prisma \
   && cp -r /app/node_modules/@prisma /prod/node_modules/@prisma
 
@@ -34,7 +34,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 
 # Install runtime dependencies + tini + su-exec for privilege drop
-# Note: corepack is NOT needed in runtime (we only run node, not yarn)
+# Note: corepack is NOT needed in runtime (we only run node, not pnpm)
 RUN apk add --no-cache openssl libc6-compat tini su-exec \
   && addgroup -g 1001 -S nodejs \
   && adduser -S nestjs -u 1001 -G nodejs \
