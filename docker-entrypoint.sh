@@ -13,6 +13,13 @@ APP_USER="nestjs"
 APP_UID=1001
 APP_GID=1001
 
+
+echo "Running Prisma migrations..."
+npx prisma migrate deploy
+
+echo "Running Prisma seed..."
+npx prisma db seed
+
 # Fix logs directory permissions (runs as root initially)
 if [ "$(id -u)" = "0" ]; then
   # Create logs directory if not exists
