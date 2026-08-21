@@ -5,6 +5,8 @@ WORKDIR /app
 RUN apk add --no-cache openssl libc6-compat
 RUN corepack enable && corepack prepare pnpm@11.22.0 --activate
 
+ENV PNPM_IGNORE_SCRIPTS=true
+
 # Install deps (copy .npmrc if you have one; pnpm uses pnpm-lock.yaml)
 COPY package.json pnpm-lock.yaml ./
 # COPY .npmrc .npmrc   # uncomment if you have custom npm registry config
