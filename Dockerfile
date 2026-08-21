@@ -22,10 +22,6 @@ RUN pnpm prisma:generate
 COPY . .
 RUN pnpm run build
 
-# Prepare prod-only node_modules with Prisma client
-# 1. Create prod deps, 2. Copy generated Prisma client into it
-COPY --from=build /app/node_modules /prod/node_modules
-
 # -------- runtime --------
 FROM node:22-alpine AS prod
 WORKDIR /app
@@ -39,7 +35,7 @@ RUN apk add --no-cache openssl libc6-compat tini su-exec \
   && rm -rf /var/cache/apk/* /tmp/*
 
 # Copy prod node_modules (already includes Prisma client)
-COPY --from=build --chown=nestjs:nodejs /prod/node_modules ./node_modules
+COPY --from=build --chown=nestjs:nodejs /app/node_modules ./node_modules
 
 COPY --from=build --chown=nestjs:nodejs /app/dist ./dist
 COPY --from=build --chown=nestjs:nodejs /app/prisma ./prisma
