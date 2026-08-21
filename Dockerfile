@@ -24,11 +24,7 @@ RUN pnpm run build
 
 # Prepare prod-only node_modules with Prisma client
 # 1. Create prod deps, 2. Copy generated Prisma client into it
-RUN mkdir /prod && cp package.json pnpm-lock.yaml /prod \
-  && cd /prod \
-  && pnpm install --prod --frozen-lockfile --ignore-scripts \
-  && cp -r /app/node_modules/.prisma /prod/node_modules/.prisma \
-  && cp -r /app/node_modules/@prisma /prod/node_modules/@prisma
+COPY --from=build /app/node_modules /prod/node_modules
 
 # -------- runtime --------
 FROM node:22-alpine AS prod
