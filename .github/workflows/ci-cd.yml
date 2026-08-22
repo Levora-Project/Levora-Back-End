@@ -270,7 +270,7 @@ jobs:
         run: docker stop levora-app || true
 
   # =========================================================================
-  # 4. DEPLOY TO STAGING (NEW)
+  # 4. DEPLOY TO STAGING
   # =========================================================================
   deploy-staging:
     name: Deploy to Staging
@@ -303,7 +303,7 @@ jobs:
           fi
 
   # =========================================================================
-  # 5. WAIT FOR STAGING DEPLOYMENT (NEW)
+  # 5. WAIT FOR STAGING DEPLOYMENT
   # =========================================================================
   wait-for-staging:
     name: Wait for Staging Deployment
@@ -359,7 +359,7 @@ jobs:
           done
 
   # =========================================================================
-  # 6. RUN SMOKE TESTS (NEW)
+  # 6. RUN SMOKE TESTS (Newman)
   # =========================================================================
   run-smoke-tests:
     name: Run API Smoke Tests (Newman)
@@ -370,19 +370,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.22.0
-          run_install: false
-
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
       - name: Install Newman
-        run: pnpm add -g newman
+        run: npm install -g newman
 
       - name: Run Newman Smoke Tests Against Staging
         run: |
@@ -400,7 +394,105 @@ jobs:
           retention-days: 1
 
   # =========================================================================
-  # 7. DEPLOY TO PRODUCTION (NEW - Manual Approval Required)
+  # 7. CREATE STAGING GITHUB DEPLOYMENT RECORD
+  # =========================================================================
+  create-staging-deployment:
+    name: Create Staging Deployment Record
+    needs: [deploy-staging, wait-for-staging, run-smoke-tests]
+    if: always() && !cancelled() && needs.deploy-staging.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: write
+      contents: read
+
+    steps:
+      - name: Record Staging Deployment Status
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          STAGING_STATE="${{ (needs.wait-for-staging.result == 'success' && needs.run-smoke-tests.result == 'success') && 'success' || 'failure' }}"
+          echo "Creating GitHub Deployment record for Staging (state: $STAGING_STATE)..."
+
+          DEPLOY_RESP=$(curl -s -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/deployments \
+            -d '{
+              "ref": "${{ github.sha }}",
+              "environment": "staging",
+              "auto_merge": false,
+              "required_contexts": []
+            }')
+
+          DEPLOYMENT_ID=$(echo "$DEPLOY_RESP" | jq -r '.id // empty')
+          if [ -n "$DEPLOYMENT_ID" ]; then
+            curl -s -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/${{ github.repository }}/deployments/$DEPLOYMENT_ID/statuses \
+              -d "{
+                \"state\": \"$STAGING_STATE\",
+                \"environment_url\": \"https://levora-back-end.onrender.com\",
+                \"log_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+              }"
+            echo "Staging deployment record #$DEPLOYMENT_ID updated with state $STAGING_STATE"
+          else
+            echo "Failed to create Staging deployment record: $DEPLOY_RESP"
+          fi
+
+  # =========================================================================
+  # 8. SAVE STAGING LOGS & ARTIFACTS (Always Executes for Staging)
+  # =========================================================================
+  save-staging-logs:
+    name: Save Staging Logs & Artifacts
+    needs: [deploy-staging, wait-for-staging, run-smoke-tests, create-staging-deployment]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Download Newman Report
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: newman-report
+          path: .
+
+      - name: Collect Staging Logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RENDER_API_KEY_STAGING: ${{ secrets.RENDER_API_KEY_STAGING }}
+          RENDER_STAGING_SERVICE_ID: ${{ secrets.RENDER_STAGING_SERVICE_ID }}
+        run: |
+          echo "Collecting GitHub Actions build logs..."
+          gh run view ${{ github.run_id }} --log > build-logs.txt 2>&1 || echo "Build logs could not be retrieved via GitHub CLI" > build-logs.txt
+
+          echo "Collecting Render Staging logs..."
+          if [ -n "$RENDER_API_KEY_STAGING" ] && [ -n "$RENDER_STAGING_SERVICE_ID" ]; then
+            curl -s -H "Authorization: Bearer $RENDER_API_KEY_STAGING" \
+              "https://api.render.com/v1/services/$RENDER_STAGING_SERVICE_ID/logs?limit=200" > staging-logs.txt 2>&1 || echo "Failed to fetch Render Staging logs" > staging-logs.txt
+          else
+            echo "Render Staging credentials not configured" > staging-logs.txt
+          fi
+
+          if [ ! -f newman-report.json ]; then
+            echo '{"info": "No Newman report generated or tests were skipped"}' > newman-report.json
+          fi
+
+      - name: Upload Staging Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-logs-${{ github.run_id }}
+          path: |
+            build-logs.txt
+            staging-logs.txt
+            newman-report.json
+
+  # =========================================================================
+  # 9. DEPLOY TO PRODUCTION (Manual Approval Required via GitHub Environment)
   # =========================================================================
   deploy-production:
     name: Deploy to Production
@@ -437,7 +529,7 @@ jobs:
           fi
 
   # =========================================================================
-  # 8. WAIT FOR PRODUCTION DEPLOYMENT (NEW)
+  # 10. WAIT FOR PRODUCTION DEPLOYMENT
   # =========================================================================
   wait-for-production:
     name: Wait for Production Deployment
@@ -494,54 +586,19 @@ jobs:
           done
 
   # =========================================================================
-  # 9. CREATE GITHUB DEPLOYMENT RECORDS (NEW)
+  # 11. CREATE PRODUCTION GITHUB DEPLOYMENT RECORD
   # =========================================================================
-  create-deployment-records:
-    name: Create GitHub Deployment Records
-    needs: [deploy-staging, wait-for-staging, run-smoke-tests, deploy-production, wait-for-production]
-    if: always() && !cancelled() && needs.deploy-staging.result != 'skipped'
+  create-production-deployment:
+    name: Create Production Deployment Record
+    needs: [deploy-production, wait-for-production]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && always() && !cancelled() && needs.deploy-production.result != 'skipped'
     runs-on: ubuntu-latest
     permissions:
       deployments: write
       contents: read
 
     steps:
-      - name: Record Staging Deployment Status
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          STAGING_STATE="${{ (needs.wait-for-staging.result == 'success' && needs.run-smoke-tests.result == 'success') && 'success' || 'failure' }}"
-          echo "Creating GitHub Deployment record for Staging (state: $STAGING_STATE)..."
-
-          DEPLOY_RESP=$(curl -s -X POST \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/${{ github.repository }}/deployments \
-            -d '{
-              "ref": "${{ github.sha }}",
-              "environment": "staging",
-              "auto_merge": false,
-              "required_contexts": []
-            }')
-
-          DEPLOYMENT_ID=$(echo "$DEPLOY_RESP" | jq -r '.id // empty')
-          if [ -n "$DEPLOYMENT_ID" ]; then
-            curl -s -X POST \
-              -H "Authorization: Bearer $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              https://api.github.com/repos/${{ github.repository }}/deployments/$DEPLOYMENT_ID/statuses \
-              -d "{
-                \"state\": \"$STAGING_STATE\",
-                \"environment_url\": \"https://levora-back-end.onrender.com\",
-                \"log_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
-              }"
-            echo "Staging deployment record #$DEPLOYMENT_ID updated with state $STAGING_STATE"
-          else
-            echo "Failed to create Staging deployment record: $DEPLOY_RESP"
-          fi
-
       - name: Record Production Deployment Status
-        if: github.event_name == 'push' && needs.deploy-production.result != 'skipped'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -576,44 +633,23 @@ jobs:
           fi
 
   # =========================================================================
-  # 10. SAVE LOGS & ARTIFACTS (NEW - Always Executes)
+  # 12. SAVE PRODUCTION LOGS & ARTIFACTS (Always Executes for Production)
   # =========================================================================
-  save-logs:
-    name: Save & Upload Logs
-    needs: [deploy-staging, wait-for-staging, run-smoke-tests, deploy-production, wait-for-production, create-deployment-records]
-    if: always()
+  save-production-logs:
+    name: Save Production Logs & Artifacts
+    needs: [deploy-production, wait-for-production, create-production-deployment]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && always()
     runs-on: ubuntu-latest
     permissions:
       actions: read
       contents: read
 
     steps:
-      - name: Download Newman Report
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: newman-report
-          path: .
-
-      - name: Collect Deployment Logs
+      - name: Collect Production Logs
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RENDER_API_KEY_STAGING: ${{ secrets.RENDER_API_KEY_STAGING }}
-          RENDER_STAGING_SERVICE_ID: ${{ secrets.RENDER_STAGING_SERVICE_ID }}
           RENDER_API_KEY_PRODUCTION: ${{ secrets.RENDER_API_KEY_PRODUCTION }}
           RENDER_PRODUCTION_SERVICE_ID: ${{ secrets.RENDER_PRODUCTION_SERVICE_ID }}
         run: |
-          echo "Collecting GitHub Actions build logs..."
-          gh run view ${{ github.run_id }} --log > build-logs.txt 2>&1 || echo "Build logs could not be retrieved via GitHub CLI" > build-logs.txt
-
-          echo "Collecting Render Staging logs..."
-          if [ -n "$RENDER_API_KEY_STAGING" ] && [ -n "$RENDER_STAGING_SERVICE_ID" ]; then
-            curl -s -H "Authorization: Bearer $RENDER_API_KEY_STAGING" \
-              "https://api.render.com/v1/services/$RENDER_STAGING_SERVICE_ID/logs?limit=200" > staging-logs.txt 2>&1 || echo "Failed to fetch Render Staging logs" > staging-logs.txt
-          else
-            echo "Render Staging credentials not configured" > staging-logs.txt
-          fi
-
           echo "Collecting Render Production logs..."
           if [ -n "$RENDER_API_KEY_PRODUCTION" ] && [ -n "$RENDER_PRODUCTION_SERVICE_ID" ]; then
             curl -s -H "Authorization: Bearer $RENDER_API_KEY_PRODUCTION" \
@@ -622,17 +658,10 @@ jobs:
             echo "Render Production credentials not configured or deployment was not triggered" > production-logs.txt
           fi
 
-          if [ ! -f newman-report.json ]; then
-            echo '{"info": "No Newman report generated or tests were skipped"}' > newman-report.json
-          fi
-
-      - name: Upload logs
+      - name: Upload Production Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-logs-${{ github.run_id }}
+          name: production-logs-${{ github.run_id }}
           path: |
-            build-logs.txt
-            staging-logs.txt
             production-logs.txt
-            newman-report.json
