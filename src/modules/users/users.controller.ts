@@ -9,6 +9,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -28,15 +29,18 @@ import {
 } from './dto';
 import { ErrorResponse } from '@common/dto';
 import { Roles, ResponseMessage, CurrentUser } from '@common/decorators';
+import { AuthGuard } from '@common/guards';
 
 @ApiTags('Users')
 @ApiBearerAuth()
+@UseGuards(AuthGuard)
 @Controller('users')
 @ApiResponse({ status: 401, description: 'Unauthorized', type: ErrorResponse })
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('profile')
+  @UseGuards(AuthGuard)
   @ResponseMessage('Profile retrieved successfully')
   @ApiOperation({ summary: 'Get current authenticated user profile' })
   @ApiResponse({
