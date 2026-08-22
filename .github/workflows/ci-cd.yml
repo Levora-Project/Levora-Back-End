@@ -278,17 +278,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger Render Staging Deploy Hook
+      - name: Trigger Render Staging Deployment
         env:
-          DEPLOY_HOOK_URL: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
+          SERVICE_ID: ${{ secrets.RENDER_STAGING_SERVICE_ID }}
         run: |
-          if [ -z "$DEPLOY_HOOK_URL" ]; then
-            echo "::error::RENDER_STAGING_DEPLOY_HOOK secret is not set or empty in repository settings."
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
+            echo "::error::RENDER_API_KEY_STAGING or RENDER_STAGING_SERVICE_ID is not configured."
             exit 1
           fi
 
-          echo "Triggering Staging deployment on Render..."
-          response=$(curl -s -w "\n%{http_code}" -X POST "$DEPLOY_HOOK_URL")
+          echo "Triggering Staging deployment on Render for ref '${{ github.ref_name }}'..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://api.render.com/v1/services/$SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"ref": "${{ github.ref_name }}", "clearCache": "true"}')
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
 
@@ -296,9 +300,9 @@ jobs:
           echo "HTTP Status Code: $http_code"
 
           if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
-            echo "::notice::Staging deploy hook triggered successfully (HTTP $http_code)."
+            echo "::notice::Staging deployment triggered successfully (HTTP $http_code)."
           else
-            echo "::error::Render Staging deploy hook failed with HTTP status $http_code: $body"
+            echo "::error::Render Staging deployment failed with HTTP status $http_code: $body"
             exit 1
           fi
 
