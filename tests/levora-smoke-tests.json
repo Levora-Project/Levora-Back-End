@@ -474,14 +474,14 @@
 					}
 				},
 				{
-					"name": "POST /auth/refresh - Missing Token (401 Unauthorized)",
+					"name": "POST /auth/refresh - Missing Token (422 Unprocessable Entity)",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test('Status code is 401 Unauthorized', function () {",
-									"    pm.response.to.have.status(401);",
+									"pm.test('Status code is 422 Unprocessable Entity', function () {",
+									"    pm.response.to.have.status(422);",
 									"});"
 								],
 								"type": "text/javascript"
