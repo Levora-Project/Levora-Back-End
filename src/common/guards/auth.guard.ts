@@ -7,7 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { IS_PUBLIC_KEY } from '@common/decorators';
-import { AuthService, JwtPayload } from '@modules/auth';
+import { AuthService, JwtPayload } from '@/modules/auth/auth.service';
 
 /**
  * Combined auth guard that supports (in priority order):
