@@ -292,7 +292,7 @@ jobs:
           response=$(curl -s -w "\n%{http_code}" -X POST "https://api.render.com/v1/services/$SERVICE_ID/deploys" \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
-            -d '{"ref": "${{ github.ref_name }}", "clearCache": "clear"}')
+            -d '{"ref": "${{ github.sha }}", "clearCache": "clear"}')
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
 
