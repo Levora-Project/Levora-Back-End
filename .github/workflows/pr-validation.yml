@@ -5,11 +5,10 @@ on:
     types: [opened, synchronize, reopened]
     branches:
       - main
-  deployment_status:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -22,7 +21,6 @@ jobs:
   # =========================================================================
   lint-and-format:
     name: Lint & Format Checks
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     steps:
@@ -61,7 +59,6 @@ jobs:
   # =========================================================================
   test:
     name: Unit, Integration & E2E Tests
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     services:
@@ -138,7 +135,6 @@ jobs:
   build-and-test-container:
     name: Build & Test Container
     needs: [test, lint-and-format]
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
     services:
@@ -272,13 +268,50 @@ jobs:
         run: docker stop levora-app || true
 
   # =========================================================================
-  # 4. WAIT FOR PREVIEW DEPLOYMENT
+  # 4. DEPLOY PR BRANCH TO STAGING (Render API)
+  # =========================================================================
+  deploy-preview:
+    name: Deploy PR Branch to Staging
+    needs: [build-and-test-container]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Render Staging Deployment for PR Branch
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
+          SERVICE_ID: ${{ secrets.RENDER_STAGING_SERVICE_ID }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
+            echo "::error::RENDER_API_KEY_STAGING or RENDER_STAGING_SERVICE_ID is not configured."
+            exit 1
+          fi
+
+          echo "Triggering Render deployment for PR branch '$PR_BRANCH' on service $SERVICE_ID..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://api.render.com/v1/services/$SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"ref\": \"$PR_BRANCH\", \"clearCache\": \"clear\"}")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Render API Response: $body"
+          echo "HTTP Status Code: $http_code"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "::notice::Render deployment triggered successfully (HTTP $http_code)."
+          else
+            echo "::error::Render deployment failed with HTTP status $http_code: $body"
+            exit 1
+          fi
+
+  # =========================================================================
+  # 5. WAIT FOR PREVIEW DEPLOYMENT
   # =========================================================================
   wait-for-preview:
     name: Wait for Preview Deployment
-    needs: [build-and-test-container]
+    needs: [deploy-preview]
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
 
     steps:
       - name: Poll Render Preview Deployment Status
@@ -329,16 +362,11 @@ jobs:
           done
 
   # =========================================================================
-  # 5. RUN PREVIEW TESTS (Newman Smoke Tests Against Render PR Preview)
+  # 6. RUN SMOKE TESTS (Newman)
   # =========================================================================
   run-preview-tests:
-    name: Run Preview Tests (Newman)
+    name: Run Smoke Tests (Newman)
     needs: [wait-for-preview]
-    if: |
-      always() && !cancelled() &&
-      github.event_name == 'deployment_status' &&
-      github.event.deployment_status.state == 'success' &&
-      (github.event.deployment_status.environment == 'preview' || github.event.deployment.environment == 'preview' || github.event.deployment_status.environment_type == 'preview')
     runs-on: ubuntu-latest
 
     steps:
@@ -353,21 +381,10 @@ jobs:
       - name: Install Newman
         run: npm install -g newman
 
-      - name: Run Newman Smoke Tests Against Preview URL
-        env:
-          PREVIEW_URL: ${{ github.event.deployment_status.environment_url }}
+      - name: Run Newman Smoke Tests Against Staging
         run: |
-          if [ -z "$PREVIEW_URL" ]; then
-            echo "::error::No environment_url provided in deployment_status event."
-            exit 1
-          fi
-
-          # Strip trailing slash if present
-          CLEAN_URL="${PREVIEW_URL%/}"
-          echo "Executing Newman tests against: $CLEAN_URL/api/v1"
-
           newman run tests/levora-smoke-tests.json \
-            --env-var baseUrl="$CLEAN_URL/api/v1" \
+            --env-var baseUrl=https://levora-back-end.onrender.com/api/v1 \
             --reporters cli,json \
             --reporter-json-export newman-report.json
 
