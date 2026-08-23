@@ -137,7 +137,7 @@ jobs:
   # =========================================================================
   build-and-test-container:
     name: Build & Test Container
-    needs: [test]
+    needs: [test, lint-and-format]
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
 
@@ -272,11 +272,70 @@ jobs:
         run: docker stop levora-app || true
 
   # =========================================================================
-  # 4. RUN PREVIEW TESTS (Newman Smoke Tests Against Render PR Preview)
+  # 4. WAIT FOR PREVIEW DEPLOYMENT
+  # =========================================================================
+  wait-for-preview:
+    name: Wait for Preview Deployment
+    needs: [build-and-test-container]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Poll Render Preview Deployment Status
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
+          SERVICE_ID: ${{ secrets.RENDER_STAGING_SERVICE_ID }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
+            echo "::error::RENDER_API_KEY_STAGING or RENDER_STAGING_SERVICE_ID is not configured."
+            exit 1
+          fi
+
+          echo "Polling Render API for Preview deployment status..."
+          START_TIME=$(date +%s)
+          TIMEOUT=300
+
+          while true; do
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo "::error::Preview deployment timed out after 5 minutes ($ELAPSED seconds)."
+              exit 1
+            fi
+
+            RESPONSE=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services/$SERVICE_ID/deploys?limit=1")
+
+            STATUS=$(echo "$RESPONSE" | jq -r '.[0].deploy.status // .[0].status // empty')
+
+            echo "Current Preview deployment status: '$STATUS' (Elapsed: ${ELAPSED}s / ${TIMEOUT}s)"
+
+            case "$STATUS" in
+              "live")
+                echo "Preview deployment is LIVE and healthy!"
+                exit 0
+                ;;
+              "failed"|"build_failed"|"deploy_failed"|"canceled"|"deactivated")
+                echo "::error::Preview deployment failed with status: $STATUS"
+                echo "Full response: $RESPONSE"
+                exit 1
+                ;;
+              "created"|"build_in_progress"|"update_in_progress"|"in_progress"|"pending"|*)
+                echo "Deployment in progress (status: ${STATUS:-unknown}). Waiting 60 seconds before retrying..."
+                sleep 60
+                ;;
+            esac
+          done
+
+  # =========================================================================
+  # 5. RUN PREVIEW TESTS (Newman Smoke Tests Against Render PR Preview)
   # =========================================================================
   run-preview-tests:
     name: Run Preview Tests (Newman)
+    needs: [wait-for-preview]
     if: |
+      always() && !cancelled() &&
       github.event_name == 'deployment_status' &&
       github.event.deployment_status.state == 'success' &&
       (github.event.deployment_status.environment == 'preview' || github.event.deployment.environment == 'preview' || github.event.deployment_status.environment_type == 'preview')

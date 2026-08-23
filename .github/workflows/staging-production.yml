@@ -133,7 +133,7 @@ jobs:
   # =========================================================================
   build-and-test-container:
     name: Build & Test Container
-    needs: [test]
+    needs: [test, lint-and-format]
     runs-on: ubuntu-latest
 
     services:
