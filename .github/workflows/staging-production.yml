@@ -1,0 +1,529 @@
+name: Staging & Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  deployments: write
+  actions: read
+
+jobs:
+  # =========================================================================
+  # 1. LINT & FORMAT CHECKS
+  # =========================================================================
+  lint-and-format:
+    name: Lint & Format Checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+          run_install: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm prisma:generate
+
+      - name: Run ESLint
+        run: pnpm exec eslint "{src,apps,libs,test}/**/*.ts"
+
+      - name: Check Code Formatting (Prettier)
+        run: pnpm exec prettier --check "src/**/*.ts" "test/**/*.ts"
+
+      - name: Verify Build
+        run: pnpm build
+
+  # =========================================================================
+  # 2. UNIT, INTEGRATION & E2E TESTS
+  # =========================================================================
+  test:
+    name: Unit, Integration & E2E Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: levora_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://test_user:test_password@localhost:5432/levora_test?schema=public
+      DIRECT_URL: postgresql://test_user:test_password@localhost:5432/levora_test?schema=public
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
+      PORT: 3000
+      JWT_SECRET: ci-cd-test-jwt-secret-key-minimum-32-chars-long
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.22.0
+          run_install: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm prisma:generate
+
+      - name: Enable CITEXT Extension in Test Database
+        run: PGPASSWORD=test_password psql -h localhost -U test_user -d levora_test -c "CREATE EXTENSION IF NOT EXISTS citext;"
+
+      - name: Push Schema to Test Database
+        run: pnpm exec prisma db push --skip-generate
+
+      - name: Run Unit & Integration Tests
+        run: pnpm test -- --passWithNoTests
+
+      - name: Run E2E Tests
+        run: pnpm test:e2e
+
+  # =========================================================================
+  # 3. BUILD & TEST CONTAINER
+  # =========================================================================
+  build-and-test-container:
+    name: Build & Test Container
+    needs: [test]
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: levora_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Enable CITEXT Extension in Test Database
+        run: PGPASSWORD=test_password psql -h localhost -U test_user -d levora_test -c "CREATE EXTENSION IF NOT EXISTS citext;"
+
+      - name: Build Docker Image
+        run: docker build -t levora-backend:test .
+
+      - name: Run Application Container
+        run: |
+          docker run -d \
+            --name levora-app \
+            --network host \
+            -e NODE_ENV=production \
+            -e PORT=3000 \
+            -e API_PREFIX=api \
+            -e DATABASE_URL="postgresql://test_user:test_password@localhost:5432/levora_test?schema=public" \
+            -e DIRECT_URL="postgresql://test_user:test_password@localhost:5432/levora_test?schema=public" \
+            -e REDIS_HOST="localhost" \
+            -e REDIS_PORT="6379" \
+            -e JWT_SECRET="ci-cd-test-jwt-secret-key-minimum-32-chars-long" \
+            -e LOG_LEVEL="info" \
+            levora-backend:test
+
+      - name: Wait for Container Readiness
+        run: |
+          echo "Waiting for container to become healthy..."
+          TIMEOUT=60
+          ELAPSED=0
+          until curl -s -f http://localhost:3000/api/v1/health > /dev/null 2>&1; do
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo "::error::Container failed to become healthy within $TIMEOUT seconds."
+              docker logs levora-app
+              exit 1
+            fi
+            echo "Waiting for application startup... ($ELAPSED/$TIMEOUT s)"
+            sleep 2
+            ELAPSED=$((ELAPSED + 2))
+          done
+          echo "Application container is healthy!"
+
+      - name: Run API Smoke Tests Against Running Container
+        run: |
+          set -e
+
+          echo "=== 1. Test GET /api/v1/health (Liveness) ==="
+          HEALTH_RES=$(curl -s -w "\n%{http_code}" http://localhost:3000/api/v1/health)
+          HEALTH_CODE=$(echo "$HEALTH_RES" | tail -n1)
+          HEALTH_BODY=$(echo "$HEALTH_RES" | sed '$d')
+          echo "Response Code: $HEALTH_CODE"
+          echo "Response Body: $HEALTH_BODY"
+          if [ "$HEALTH_CODE" != "200" ]; then
+            echo "::error::Health probe failed with status $HEALTH_CODE"
+            exit 1
+          fi
+
+          echo "=== 2. Test GET /api/v1/health/ready (Readiness) ==="
+          READY_RES=$(curl -s -w "\n%{http_code}" http://localhost:3000/api/v1/health/ready)
+          READY_CODE=$(echo "$READY_RES" | tail -n1)
+          READY_BODY=$(echo "$READY_RES" | sed '$d')
+          echo "Response Code: $READY_CODE"
+          echo "Response Body: $READY_BODY"
+          if [ "$READY_CODE" != "200" ]; then
+            echo "::error::Readiness probe failed with status $READY_CODE"
+            exit 1
+          fi
+
+          echo "=== 3. Test POST /api/v1/auth/register ==="
+          REG_RES=$(curl -s -w "\n%{http_code}" -X POST http://localhost:3000/api/v1/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"container-test@example.com","password":"Password123!","firstName":"Container","lastName":"Tester"}')
+          REG_CODE=$(echo "$REG_RES" | tail -n1)
+          REG_BODY=$(echo "$REG_RES" | sed '$d')
+          echo "Response Code: $REG_CODE"
+          echo "Response Body: $REG_BODY"
+          if [ "$REG_CODE" != "201" ]; then
+            echo "::error::Registration test failed with status $REG_CODE"
+            exit 1
+          fi
+
+          echo "=== 4. Test POST /api/v1/auth/login ==="
+          LOGIN_RES=$(curl -s -w "\n%{http_code}" -X POST http://localhost:3000/api/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"container-test@example.com","password":"Password123!"}')
+          LOGIN_CODE=$(echo "$LOGIN_RES" | tail -n1)
+          LOGIN_BODY=$(echo "$LOGIN_RES" | sed '$d')
+          echo "Response Code: $LOGIN_CODE"
+          echo "Response Body: $LOGIN_BODY"
+          if [ "$LOGIN_CODE" != "200" ]; then
+            echo "::error::Login test failed with status $LOGIN_CODE"
+            exit 1
+          fi
+
+          echo "All container API tests passed successfully!"
+
+      - name: Dump Container Logs on Failure
+        if: failure()
+        run: docker logs levora-app
+
+      - name: Stop Container
+        if: always()
+        run: docker stop levora-app || true
+
+  # =========================================================================
+  # 4. DEPLOY TO STAGING (Deploy Hook)
+  # =========================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [lint-and-format, test, build-and-test-container]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Render Staging Deploy Hook
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "::error::RENDER_STAGING_DEPLOY_HOOK secret is not set or empty in repository settings."
+            exit 1
+          fi
+
+          echo "Triggering Staging deployment on Render..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "$DEPLOY_HOOK_URL")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Render API Response: $body"
+          echo "HTTP Status Code: $http_code"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "::notice::Staging deploy hook triggered successfully (HTTP $http_code)."
+          else
+            echo "::error::Render Staging deploy hook failed with HTTP status $http_code: $body"
+            exit 1
+          fi
+
+  # =========================================================================
+  # 5. WAIT FOR STAGING DEPLOYMENT
+  # =========================================================================
+  wait-for-staging:
+    name: Wait for Staging Deployment
+    needs: [deploy-staging]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Poll Render Staging Deployment Status
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
+          SERVICE_ID: ${{ secrets.RENDER_STAGING_SERVICE_ID }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
+            echo "::error::RENDER_API_KEY_STAGING or RENDER_STAGING_SERVICE_ID is not configured."
+            exit 1
+          fi
+
+          echo "Polling Render API for Staging service ($SERVICE_ID) deployment status..."
+          START_TIME=$(date +%s)
+          TIMEOUT=300
+
+          while true; do
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo "::error::Staging deployment timed out after 5 minutes ($ELAPSED seconds)."
+              exit 1
+            fi
+
+            RESPONSE=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services/$SERVICE_ID/deploys?limit=1")
+
+            STATUS=$(echo "$RESPONSE" | jq -r '.[0].deploy.status // .[0].status // empty')
+
+            echo "Current Staging deployment status: '$STATUS' (Elapsed: ${ELAPSED}s / ${TIMEOUT}s)"
+
+            case "$STATUS" in
+              "live")
+                echo "Staging deployment is LIVE and healthy!"
+                exit 0
+                ;;
+              "failed"|"build_failed"|"deploy_failed"|"canceled"|"deactivated")
+                echo "::error::Staging deployment failed with status: $STATUS"
+                echo "Full response: $RESPONSE"
+                exit 1
+                ;;
+              "created"|"build_in_progress"|"update_in_progress"|"in_progress"|"pending"|*)
+                echo "Deployment in progress (status: ${STATUS:-unknown}). Waiting 60 seconds before retrying..."
+                sleep 60
+                ;;
+            esac
+          done
+
+  # =========================================================================
+  # 6. DEPLOY TO PRODUCTION (Manual Approval Required via GitHub Environment)
+  # =========================================================================
+  deploy-production:
+    name: Deploy to Production
+    needs: [wait-for-staging]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://levora-back-end-production.onrender.com
+
+    steps:
+      - name: Trigger Render Production Deploy Hook
+        env:
+          DEPLOY_HOOK_URL: ${{ secrets.RENDER_PRODUCTION_DEPLOY_HOOK }}
+        run: |
+          if [ -z "$DEPLOY_HOOK_URL" ]; then
+            echo "::error::RENDER_PRODUCTION_DEPLOY_HOOK secret is not set or empty in repository settings."
+            exit 1
+          fi
+
+          echo "Triggering Production deployment on Render..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "$DEPLOY_HOOK_URL")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Render API Response: $body"
+          echo "HTTP Status Code: $http_code"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "::notice::Production deploy hook triggered successfully (HTTP $http_code)."
+          else
+            echo "::error::Render Production deploy hook failed with HTTP status $http_code: $body"
+            exit 1
+          fi
+
+  # =========================================================================
+  # 7. WAIT FOR PRODUCTION DEPLOYMENT
+  # =========================================================================
+  wait-for-production:
+    name: Wait for Production Deployment
+    needs: [deploy-production]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Poll Render Production Deployment Status
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_PRODUCTION }}
+          SERVICE_ID: ${{ secrets.RENDER_PRODUCTION_SERVICE_ID }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
+            echo "::error::RENDER_API_KEY_PRODUCTION or RENDER_PRODUCTION_SERVICE_ID is not configured."
+            exit 1
+          fi
+
+          echo "Polling Render API for Production service ($SERVICE_ID) deployment status..."
+          START_TIME=$(date +%s)
+          TIMEOUT=300
+
+          while true; do
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - START_TIME))
+
+            if [ $ELAPSED -ge $TIMEOUT ]; then
+              echo "::error::Production deployment timed out after 5 minutes ($ELAPSED seconds)."
+              exit 1
+            fi
+
+            RESPONSE=$(curl -s -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services/$SERVICE_ID/deploys?limit=1")
+
+            STATUS=$(echo "$RESPONSE" | jq -r '.[0].deploy.status // .[0].status // empty')
+
+            echo "Current Production deployment status: '$STATUS' (Elapsed: ${ELAPSED}s / ${TIMEOUT}s)"
+
+            case "$STATUS" in
+              "live")
+                echo "Production deployment is LIVE and healthy!"
+                exit 0
+                ;;
+              "failed"|"build_failed"|"deploy_failed"|"canceled"|"deactivated")
+                echo "::error::Production deployment failed with status: $STATUS"
+                echo "Full response: $RESPONSE"
+                exit 1
+                ;;
+              "created"|"build_in_progress"|"update_in_progress"|"in_progress"|"pending"|*)
+                echo "Deployment in progress (status: ${STATUS:-unknown}). Waiting 60 seconds before retrying..."
+                sleep 60
+                ;;
+            esac
+          done
+
+  # =========================================================================
+  # 8. CREATE PRODUCTION GITHUB DEPLOYMENT RECORD
+  # =========================================================================
+  create-production-deployment:
+    name: Create Production Deployment Record
+    needs: [deploy-production, wait-for-production]
+    if: always() && !cancelled() && needs.deploy-production.result != 'skipped'
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: write
+      contents: read
+
+    steps:
+      - name: Record Production Deployment Status
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PROD_STATE="${{ needs.wait-for-production.result == 'success' && 'success' || 'failure' }}"
+          echo "Creating GitHub Deployment record for Production (state: $PROD_STATE)..."
+
+          DEPLOY_RESP=$(curl -s -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/deployments \
+            -d '{
+              "ref": "${{ github.sha }}",
+              "environment": "production",
+              "auto_merge": false,
+              "required_contexts": []
+            }')
+
+          DEPLOYMENT_ID=$(echo "$DEPLOY_RESP" | jq -r '.id // empty')
+          if [ -n "$DEPLOYMENT_ID" ]; then
+            curl -s -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/${{ github.repository }}/deployments/$DEPLOYMENT_ID/statuses \
+              -d "{
+                \"state\": \"$PROD_STATE\",
+                \"environment_url\": \"https://levora-back-end-production.onrender.com\",
+                \"log_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
+              }"
+            echo "Production deployment record #$DEPLOYMENT_ID updated with state $PROD_STATE"
+          else
+            echo "Failed to create Production deployment record: $DEPLOY_RESP"
+          fi
+
+  # =========================================================================
+  # 9. SAVE PRODUCTION LOGS & ARTIFACTS
+  # =========================================================================
+  save-production-logs:
+    name: Save Production Logs & Artifacts
+    needs: [deploy-production, wait-for-production, create-production-deployment]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Collect Production Logs
+        env:
+          RENDER_API_KEY_PRODUCTION: ${{ secrets.RENDER_API_KEY_PRODUCTION }}
+          RENDER_PRODUCTION_SERVICE_ID: ${{ secrets.RENDER_PRODUCTION_SERVICE_ID }}
+        run: |
+          echo "Collecting Render Production logs..."
+          if [ -n "$RENDER_API_KEY_PRODUCTION" ] && [ -n "$RENDER_PRODUCTION_SERVICE_ID" ]; then
+            curl -s -H "Authorization: Bearer $RENDER_API_KEY_PRODUCTION" \
+              "https://api.render.com/v1/services/$RENDER_PRODUCTION_SERVICE_ID/logs?limit=200" > production-logs.txt 2>&1 || echo "Failed to fetch Render Production logs" > production-logs.txt
+          else
+            echo "Render Production credentials not configured or deployment was not triggered" > production-logs.txt
+          fi
+
+      - name: Upload Production Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-logs-${{ github.run_id }}
+          path: |
+            production-logs.txt
