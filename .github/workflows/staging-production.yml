@@ -364,7 +364,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://levora-back-end-production.onrender.com
+      url: https://${{ secrets.RENDER_PRODUCTION_URL }}
 
     steps:
       - name: Trigger Render Production Deploy Hook
@@ -486,7 +486,7 @@ jobs:
               https://api.github.com/repos/${{ github.repository }}/deployments/$DEPLOYMENT_ID/statuses \
               -d "{
                 \"state\": \"$PROD_STATE\",
-                \"environment_url\": \"https://levora-back-end-production.onrender.com\",
+                \"environment_url\": \"https://${{ secrets.RENDER_PRODUCTION_URL }}\",
                 \"log_url\": \"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"
               }"
             echo "Production deployment record #$DEPLOYMENT_ID updated with state $PROD_STATE"

@@ -268,30 +268,34 @@ jobs:
         run: docker stop levora-app || true
 
   # =========================================================================
-  # 4. DEPLOY PR BRANCH TO STAGING (Render API)
+  # 4. CHANGE PREVIEW SERVICE BRANCH
   # =========================================================================
-  deploy-preview:
-    name: Deploy PR Branch to Staging
+  change-preview-branch:
+    name: Change Preview Service Branch
     needs: [build-and-test-container]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger Render Staging Deployment for PR Branch
+      - name: Change Preview Service Branch
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
-          SERVICE_ID: ${{ secrets.RENDER_STAGING_SERVICE_ID }}
-          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          SERVICE_ID: ${{ secrets.RENDER_PREVIEW_SERVICE_ID }}
+          BRANCH: ${{ github.head_ref }}
         run: |
           if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
-            echo "::error::RENDER_API_KEY_STAGING or RENDER_STAGING_SERVICE_ID is not configured."
+            echo "::error::RENDER_API_KEY_STAGING or RENDER_PREVIEW_SERVICE_ID is not configured."
+            exit 1
+          fi
+          if [ -z "$BRANCH" ]; then
+            echo "::error::github.head_ref is empty."
             exit 1
           fi
 
-          echo "Triggering Render deployment for PR branch '$PR_BRANCH' on service $SERVICE_ID..."
-          response=$(curl -s -w "\n%{http_code}" -X POST "https://api.render.com/v1/services/$SERVICE_ID/deploys" \
+          echo "Updating Preview service ($SERVICE_ID) branch to '$BRANCH'..."
+          response=$(curl -s -w "\n%{http_code}" -X PATCH "https://api.render.com/v1/services/$SERVICE_ID" \
             -H "Authorization: Bearer $RENDER_API_KEY" \
             -H "Content-Type: application/json" \
-            -d "{\"ref\": \"$PR_BRANCH\", \"clearCache\": \"clear\"}")
+            -d "{\"branch\": \"$BRANCH\"}")
           http_code=$(echo "$response" | tail -n1)
           body=$(echo "$response" | sed '$d')
 
@@ -299,14 +303,51 @@ jobs:
           echo "HTTP Status Code: $http_code"
 
           if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
-            echo "::notice::Render deployment triggered successfully (HTTP $http_code)."
+            echo "::notice::Preview service branch changed to '$BRANCH' successfully."
           else
-            echo "::error::Render deployment failed with HTTP status $http_code: $body"
+            echo "::error::Failed to update Preview service branch (HTTP $http_code): $body"
             exit 1
           fi
 
   # =========================================================================
-  # 5. WAIT FOR PREVIEW DEPLOYMENT
+  # 5. DEPLOY TO PREVIEW SERVICE
+  # =========================================================================
+  deploy-preview:
+    name: Deploy to Preview Service
+    needs: [change-preview-branch]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Render Preview Deployment
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
+          SERVICE_ID: ${{ secrets.RENDER_PREVIEW_SERVICE_ID }}
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
+            echo "::error::RENDER_API_KEY_STAGING or RENDER_PREVIEW_SERVICE_ID is not configured."
+            exit 1
+          fi
+
+          echo "Triggering deployment on Preview service ($SERVICE_ID)..."
+          response=$(curl -s -w "\n%{http_code}" -X POST "https://api.render.com/v1/services/$SERVICE_ID/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": "clear"}')
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Render API Response: $body"
+          echo "HTTP Status Code: $http_code"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "::notice::Preview deployment triggered successfully (HTTP $http_code)."
+          else
+            echo "::error::Render Preview deployment failed with HTTP status $http_code: $body"
+            exit 1
+          fi
+
+  # =========================================================================
+  # 6. WAIT FOR PREVIEW DEPLOYMENT
   # =========================================================================
   wait-for-preview:
     name: Wait for Preview Deployment
@@ -317,14 +358,14 @@ jobs:
       - name: Poll Render Preview Deployment Status
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
-          SERVICE_ID: ${{ secrets.RENDER_STAGING_SERVICE_ID }}
+          SERVICE_ID: ${{ secrets.RENDER_PREVIEW_SERVICE_ID }}
         run: |
           if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
-            echo "::error::RENDER_API_KEY_STAGING or RENDER_STAGING_SERVICE_ID is not configured."
+            echo "::error::RENDER_API_KEY_STAGING or RENDER_PREVIEW_SERVICE_ID is not configured."
             exit 1
           fi
 
-          echo "Polling Render API for Preview deployment status..."
+          echo "Polling Render API for Preview service ($SERVICE_ID) deployment status..."
           START_TIME=$(date +%s)
           TIMEOUT=300
 
@@ -362,7 +403,7 @@ jobs:
           done
 
   # =========================================================================
-  # 6. RUN SMOKE TESTS (Newman)
+  # 7. RUN SMOKE TESTS (Newman)
   # =========================================================================
   run-preview-tests:
     name: Run Smoke Tests (Newman)
@@ -381,10 +422,26 @@ jobs:
       - name: Install Newman
         run: npm install -g newman
 
-      - name: Run Newman Smoke Tests Against Staging
+      - name: Run Newman Smoke Tests Against Preview URL
+        env:
+          RAW_URL: ${{ secrets.RENDER_PREVIEW_URL }}
         run: |
+          if [ -z "$RAW_URL" ]; then
+            echo "::error::RENDER_PREVIEW_URL secret is not configured."
+            exit 1
+          fi
+
+          # Ensure https:// prefix and trim trailing slash
+          PREVIEW_URL="$RAW_URL"
+          if [[ ! "$PREVIEW_URL" =~ ^https?:// ]]; then
+            PREVIEW_URL="https://$PREVIEW_URL"
+          fi
+          PREVIEW_URL="${PREVIEW_URL%/}"
+
+          echo "Running Newman tests against: $PREVIEW_URL/api/v1"
+
           newman run tests/levora-smoke-tests.json \
-            --env-var baseUrl=https://levora-back-end.onrender.com/api/v1 \
+            --env-var baseUrl="$PREVIEW_URL/api/v1" \
             --reporters cli,json \
             --reporter-json-export newman-report.json
 
@@ -395,3 +452,41 @@ jobs:
           name: newman-report
           path: newman-report.json
           retention-days: 7
+
+  # =========================================================================
+  # 8. RESET PREVIEW SERVICE BRANCH
+  # =========================================================================
+  reset-preview-branch:
+    name: Reset Preview Branch to Main
+    needs: [run-preview-tests]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Reset Preview Service Branch
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
+          SERVICE_ID: ${{ secrets.RENDER_PREVIEW_SERVICE_ID }}
+          BRANCH: "main"
+        run: |
+          if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
+            echo "::warn::RENDER_API_KEY_STAGING or RENDER_PREVIEW_SERVICE_ID is not configured. Skipping branch reset."
+            exit 0
+          fi
+
+          echo "Resetting Preview service ($SERVICE_ID) branch to '$BRANCH'..."
+          response=$(curl -s -w "\n%{http_code}" -X PATCH "https://api.render.com/v1/services/$SERVICE_ID" \
+            -H "Authorization: Bearer $RENDER_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"branch\": \"$BRANCH\"}")
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Render API Response: $body"
+          echo "HTTP Status Code: $http_code"
+
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "::notice::Preview service branch reset to 'main' successfully."
+          else
+            echo "::warn::Failed to reset Preview service branch (HTTP $http_code): $body"
+          fi
