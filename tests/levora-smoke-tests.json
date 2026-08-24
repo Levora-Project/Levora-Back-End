@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "levora-smoke-tests-v1",
 		"name": "Levora API Smoke & Integration Tests",
-		"description": "Comprehensive automated smoke tests for Levora NestJS backend covering Health, Auth, and Users endpoints.",
+		"description": "Comprehensive automated smoke tests for Levora NestJS backend covering Health, Auth, and Users endpoints.\n\n### Important Testing Notes:\n- Newman's cookie jar persists session cookies between requests by default.\n- When testing unauthorised/unauthenticated endpoints (e.g., expecting 401 Unauthorized or 422 Unprocessable Entity), pre-request scripts must explicitly clear cookies to avoid false positives from active sessions.\n- Always use explicit Authorization headers for authenticated requests; do not rely on cookies for API testing in CI.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -354,6 +354,19 @@
 					"name": "GET /auth/me - Without JWT (401 Unauthorized)",
 					"event": [
 						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear cookies to simulate an unauthenticated request.",
+									"// Newman's cookie jar persists session cookies across requests by default, which can cause false positives.",
+									"// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
+									"pm.request.headers.remove('Cookie');",
+									"pm.request.headers.upsert({ key: 'Cookie', value: '' });"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
 							"listen": "test",
 							"script": {
 								"exec": [
@@ -477,6 +490,19 @@
 					"name": "POST /auth/refresh - Missing Token (422 Unprocessable Entity)",
 					"event": [
 						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear cookies to simulate a request missing authentication/refresh tokens in session.",
+									"// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
+									"// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
+									"pm.request.headers.remove('Cookie');",
+									"pm.request.headers.upsert({ key: 'Cookie', value: '' });"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
 							"listen": "test",
 							"script": {
 								"exec": [
@@ -520,6 +546,19 @@
 				{
 					"name": "GET /users/profile - Without JWT (401 Unauthorized)",
 					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear cookies to simulate an unauthenticated request.",
+									"// Newman's cookie jar persists session cookies across requests by default, which can cause false positives.",
+									"// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
+									"pm.request.headers.remove('Cookie');",
+									"pm.request.headers.upsert({ key: 'Cookie', value: '' });"
+								],
+								"type": "text/javascript"
+							}
+						},
 						{
 							"listen": "test",
 							"script": {
