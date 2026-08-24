@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "levora-smoke-tests-v1",
 		"name": "Levora API Smoke & Integration Tests",
-		"description": "Comprehensive automated smoke tests for Levora NestJS backend covering Health, Auth, and Users endpoints.\n\n### Important Testing Notes:\n- Newman's cookie jar persists session cookies between requests by default.\n- When testing unauthorised/unauthenticated endpoints (e.g., expecting 401 Unauthorized or 422 Unprocessable Entity), pre-request scripts must explicitly clear cookies to avoid false positives from active sessions.\n- Always use explicit Authorization headers for authenticated requests; do not rely on cookies for API testing in CI.",
+		"description": "Comprehensive automated smoke tests for Levora NestJS backend covering Health, Auth, and Users endpoints.\n\n### Execution Order & Newman Cookie Isolation:\n- All unauthenticated tests and validation error checks (expecting 401 Unauthorized or 422 Unprocessable Entity) are intentionally sequenced at the beginning of the test suite before any user creation or login steps.\n- This ensures Newman's cookie jar remains completely empty when executing unauthenticated tests, eliminating false positives caused by automatic session cookie persistence across requests.\n- Authenticated requests explicitly supply the Authorization header using collection variables.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"variable": [
@@ -158,6 +158,144 @@
 					}
 				},
 				{
+					"name": "GET /auth/me - Without JWT (401 Unauthorized)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear cookies from the cookie jar to simulate an unauthenticated request.",
+									"// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
+									"// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
+									"pm.cookies.clear();",
+									"pm.request.headers.remove('Cookie');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 401 Unauthorized', function () {",
+									"    pm.response.to.have.status(401);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/auth/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"me"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET /users/profile - Without JWT (401 Unauthorized)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear cookies from the cookie jar to simulate an unauthenticated request.",
+									"// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
+									"// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
+									"pm.cookies.clear();",
+									"pm.request.headers.remove('Cookie');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 401 Unauthorized', function () {",
+									"    pm.response.to.have.status(401);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/users/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"users",
+								"profile"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST /auth/refresh - Missing Token (401 Unauthorized)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear cookies from the cookie jar to simulate a request missing authentication/refresh tokens in session.",
+									"// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
+									"// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
+									"pm.cookies.clear();",
+									"pm.request.headers.remove('Cookie');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 401 Unauthorized', function () {",
+									"    pm.response.to.have.status(401);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/refresh",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"refresh"
+							]
+						}
+					}
+				},
+				{
 					"name": "POST /auth/register - Valid Payload (201 Created)",
 					"event": [
 						{
@@ -216,50 +354,6 @@
 					}
 				},
 				{
-					"name": "POST /auth/register - Duplicate Email (409 Conflict)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('Status code is 409 Conflict', function () {",
-									"    pm.response.to.have.status(409);",
-									"});",
-									"pm.test('Returns conflict error message', function () {",
-									"    var jsonData = pm.response.json();",
-									"    pm.expect(jsonData.success).to.eql(false);",
-									"    pm.expect(jsonData.status).to.eql(409);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"firstName\": \"Duplicate\",\n  \"lastName\": \"Tester\"\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/auth/register",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"auth",
-								"register"
-							]
-						}
-					}
-				},
-				{
 					"name": "POST /auth/login - Invalid Password (401 Unauthorized)",
 					"event": [
 						{
@@ -299,6 +393,50 @@
 							"path": [
 								"auth",
 								"login"
+							]
+						}
+					}
+				},
+				{
+					"name": "POST /auth/register - Duplicate Email (409 Conflict)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 409 Conflict', function () {",
+									"    pm.response.to.have.status(409);",
+									"});",
+									"pm.test('Returns conflict error message', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.success).to.eql(false);",
+									"    pm.expect(jsonData.status).to.eql(409);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"firstName\": \"Duplicate\",\n  \"lastName\": \"Tester\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/auth/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"register"
 							]
 						}
 					}
@@ -346,49 +484,6 @@
 							"path": [
 								"auth",
 								"login"
-							]
-						}
-					}
-				},
-				{
-					"name": "GET /auth/me - Without JWT (401 Unauthorized)",
-					"event": [
-						{
-							"listen": "prerequest",
-							"script": {
-								"exec": [
-									"// Clear cookies to simulate an unauthenticated request.",
-									"// Newman's cookie jar persists session cookies across requests by default, which can cause false positives.",
-									"// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
-									"pm.request.headers.remove('Cookie');",
-									"pm.request.headers.upsert({ key: 'Cookie', value: '' });"
-								],
-								"type": "text/javascript"
-							}
-						},
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('Status code is 401 Unauthorized', function () {",
-									"    pm.response.to.have.status(401);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/auth/me",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"auth",
-								"me"
 							]
 						}
 					}
@@ -485,107 +580,12 @@
 							]
 						}
 					}
-				},
-				{
-					"name": "POST /auth/refresh - Missing Token (422 Unprocessable Entity)",
-					"event": [
-						{
-							"listen": "prerequest",
-							"script": {
-								"exec": [
-									"// Clear cookies to simulate a request missing authentication/refresh tokens in session.",
-									"// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
-									"// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
-									"pm.request.headers.remove('Cookie');",
-									"pm.request.headers.upsert({ key: 'Cookie', value: '' });"
-								],
-								"type": "text/javascript"
-							}
-						},
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('Status code is 422 Unprocessable Entity', function () {",
-									"    pm.response.to.have.status(422);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/auth/refresh",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"auth",
-								"refresh"
-							]
-						}
-					}
 				}
 			]
 		},
 		{
 			"name": "3. Users & RBAC",
 			"item": [
-				{
-					"name": "GET /users/profile - Without JWT (401 Unauthorized)",
-					"event": [
-						{
-							"listen": "prerequest",
-							"script": {
-								"exec": [
-									"// Clear cookies to simulate an unauthenticated request.",
-									"// Newman's cookie jar persists session cookies across requests by default, which can cause false positives.",
-									"// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
-									"pm.request.headers.remove('Cookie');",
-									"pm.request.headers.upsert({ key: 'Cookie', value: '' });"
-								],
-								"type": "text/javascript"
-							}
-						},
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('Status code is 401 Unauthorized', function () {",
-									"    pm.response.to.have.status(401);",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/users/profile",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"users",
-								"profile"
-							]
-						}
-					}
-				},
 				{
 					"name": "GET /users/profile - With JWT (200 OK)",
 					"event": [
