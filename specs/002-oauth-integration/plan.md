@@ -7,7 +7,7 @@
 **Sprint:** 1
 **Status:** Draft
 **Created:** 2026-08-19
-**Updated:** 2026-08-19
+**Updated:** 2026-08-20
 
 ---
 
@@ -18,20 +18,22 @@
 | Layer | Technology | Version |
 |-------|------------|---------|
 | Backend Framework | NestJS | ^10.0.0 |
-| Authentication | Passport.js | ^0.6.0 |
+| Authentication | @nestjs/social-auth (existing), Passport.js | ^0.6.0 |
 | OAuth Strategies | passport-google-oauth20, passport-linkedin-oauth2 | ^2.0.0 |
 | Database ORM | Prisma | ^5.0.0 |
 | Database | PostgreSQL | 15+ |
 | Encryption | Crypto (Node.js built-in) | - |
+| Testing (E2E) | nock | ^13.0.0 |
 
 ### 1.2 Architecture Patterns
 
 | Pattern | Description |
 |---------|-------------|
-| Strategy Pattern | OAuth strategies for different providers |
-| Dependency Injection | NestJS DI for service composition |
-| Repository Pattern | Prisma for data access |
-| Factory Pattern | User creation from OAuth profile data |
+| Adapter Pattern | Wrap `@nestjs/social-auth` strategies with custom business logic. |
+| Strategy Pattern | OAuth strategies for different providers. |
+| Dependency Injection | NestJS DI for service composition. |
+| Repository Pattern | Prisma for data access. |
+| Factory Pattern | User creation from OAuth profile data via `OAuthProcessorService`. |
 
 ---
 
@@ -39,331 +41,193 @@
 
 ### 2.1 Module Structure (Additions to Auth Module)
 
+We will leverage the existing `@nestjs/social-auth` module configuration. Our custom logic will reside in new services.
+
 ```
 src/modules/auth/
-├── strategies/
-│   ├── google.strategy.ts        # Google OAuth strategy
-│   └── linkedin.strategy.ts      # LinkedIn OAuth strategy
+├── strategies/                     # (Existing, from social-auth)
+│   ├── google.strategy.ts          # Already configured by social-auth
+│   └── linkedin.strategy.ts        # Already configured by social-auth
 ├── services/
-│   ├── auth.service.ts           # Extended with OAuth methods
-│   └── oauth.service.ts          # NEW: OAuth-specific service
+│   ├── auth.service.ts             # Extended with OAuth methods
+│   ├── oauth-processor.service.ts  # NEW: Core OAuth business logic (creation, linking, encryption)
+│   ├── encryption.service.ts       # NEW: Token encryption/decryption
+│   └── oauth-identity.service.ts   # NEW: CRUD for OauthIdentities
 ├── controllers/
-│   └── auth.controller.ts        # Extended with OAuth endpoints
-├── dto/
-│   └── oauth-callback.dto.ts     # NEW: OAuth callback DTO
+│   └── auth.controller.ts          # Extended with OAuth endpoints (already present from social-auth)
+├── guards/
+│   └── oauth.guard.ts              # Optional custom guard if needed
 └── interfaces/
-    └── oauth-profile.interface.ts # NEW: OAuth profile interface
+    └── oauth-profile.interface.ts  # NEW: Standardized OAuth profile interface
 ```
 
-### 2.2 OAuth Flow Diagram
+### 2.2 OAuth Flow Diagram (Customized)
 
 ```
-┌─────────┐         ┌─────────────┐         ┌─────────────┐
-│  Client │         │   NestJS    │         │   OAuth     │
-│         │         │   Backend   │         │  Provider   │
-└────┬────┘         └──────┬──────┘         └──────┬──────┘
-     │                     │                       │
-     │ GET /auth/google    │                       │
-     ├────────────────────>│                       │
-     │                     │                       │
-     │                     │ Redirect to Provider  │
-     │                     ├──────────────────────>│
-     │                     │                       │
-     │                     │                       │
-     │                     │ Provider redirects to │
-     │                     │ callback URL          │
-     │                     │<──────────────────────┤
-     │                     │                       │
-     │                     │ Verify OAuth code     │
-     │                     │ and get profile       │
-     │                     ├──────────────────────>│
-     │                     │                       │
-     │                     │ Profile + Tokens      │
-     │                     │<──────────────────────┤
-     │                     │                       │
-     │                     │ Find or Create User   │
-     │                     │ Store OAuth Identity  │
-     │                     │ Generate JWT          │
-     │                     │                       │
-     │ Redirect with JWT   │                       │
-     │<────────────────────┤                       │
-     │                     │                       │
+┌─────────┐         ┌──────────────────────┐         ┌─────────────┐
+│  Client │         │     NestJS Auth      │         │   OAuth     │
+│         │         │       Module         │         │  Provider   │
+└────┬────┘         └──────────┬───────────┘         └──────┬──────┘
+     │                         │                            │
+     │ GET /auth/google        │                            │
+     ├────────────────────────>│                            │
+     │                         │                            │
+     │                         │ Redirect to Provider       │
+     │                         ├───────────────────────────>│
+     │                         │                            │
+     │                         │ Provider redirects to      │
+     │                         │ callback URL               │
+     │                         │<───────────────────────────┤
+     │                         │                            │
+     │                         │ social-auth validates code │
+     │                         │ and fetches profile        │
+     │                         ├───────────────────────────>│
+     │                         │                            │
+     │                         │ Profile + Tokens           │
+     │                         │<───────────────────────────┤
+     │                         │                            │
+     │                         │ --- OAuthProcessorService --- │
+     │                         │ 1. Check email present     │
+     │                         │ 2. Encrypt tokens          │
+     │                         │ 3. Find/Create User        │
+     │                         │ 4. Link/Link OAuth Identity│
+     │                         │ 5. Generate JWT            │
+     │                         │                            │
+     │ Redirect with JWT       │                            │
+     │<────────────────────────┤                            │
+     │                         │                            │
 ```
 
 ---
 
 ## 3. Implementation Strategy
 
-### 3.1 Phase 1: Dependency Setup & Configuration
+### 3.1 Phase 1: Setup & Configuration
 
-**Goal:** Install required packages and configure OAuth settings.
-
-**Tasks:**
-1. Install `@nestjs/passport`, `passport-google-oauth20`, `passport-linkedin-oauth2`
-2. Add type definitions for OAuth packages
-3. Update environment configuration
-4. Create `.env.example` entries for OAuth
-
-### 3.2 Phase 2: Google OAuth Integration
-
-**Goal:** Implement Google OAuth strategy and endpoints.
+**Goal:** Prepare the environment and ensure dependencies are aligned.
 
 **Tasks:**
-1. Create Google strategy
-2. Implement Google OAuth controller endpoints
-3. Handle Google profile data processing
-4. Create or find user from Google profile
+1. Verify `@nestjs/social-auth` installation and configuration.
+2. Install `nock` for E2E testing (`pnpm add -D nock`).
+3. Update environment configuration with Google and LinkedIn settings.
+4. Create `.env.example` entries for all OAuth variables.
+5. Ensure `OAUTH_ENCRYPTION_KEY` is generated (64 hex chars) and documented.
+6. **Crucial:** Verify or create a database seed for the default role `user`.
 
-### 3.3 Phase 3: LinkedIn OAuth Integration
+### 3.2 Phase 2: Core Services (Encryption & Identity)
 
-**Goal:** Implement LinkedIn OAuth strategy and endpoints.
-
-**Tasks:**
-1. Create LinkedIn strategy
-2. Implement LinkedIn OAuth controller endpoints
-3. Handle LinkedIn profile data processing
-4. Create or find user from LinkedIn profile
-
-### 3.4 Phase 4: User Management & Token Storage
-
-**Goal:** Implement OAuth user management and secure token storage.
+**Goal:** Build the foundational services independent of the provider.
 
 **Tasks:**
-1. Extend UsersService for OAuth user creation
-2. Implement OAuth identity storage with encryption
-3. Handle account linking for existing users
-4. Implement proper error handling
+1. Implement `EncryptionService` (AES-256-CBC).
+2. Implement `OauthIdentityService` (CRUD operations on `OauthIdentities`).
+3. Write unit tests for both services.
+
+### 3.3 Phase 3: OAuth Processor Service
+
+**Goal:** Implement the central business logic for handling OAuth callbacks.
+
+**Tasks:**
+1. Create `OAuthProcessorService`.
+2. Implement `handleOAuthLogin(provider, providerUserId, email, firstName, lastName, accessToken, refreshToken)`.
+   - Check for missing email -> throw `BadRequestException` with specific message.
+   - Check for existing identity -> update tokens, return user.
+   - Check for existing user by email -> link identity, return user.
+   - Create new user -> set `isDraft: true`, create profile, assign role `user`.
+3. Integrate `EncryptionService` and `OauthIdentityService`.
+
+### 3.4 Phase 4: Customize Social Auth Integration
+
+**Goal:** Plug the `OAuthProcessorService` into the existing `@nestjs/social-auth` strategies.
+
+**Tasks:**
+1. Extend or customize the existing Google and LinkedIn strategy classes (or their parent).
+2. Override/modify the `validate` method to call `OAuthProcessorService.handleOAuthLogin`.
+3. Handle exceptions from the processor (e.g., missing email) and convert them to appropriate HTTP responses.
+4. Ensure the existing public endpoints (`/auth/google`, `/auth/google/callback`, etc.) use these customized strategies.
 
 ### 3.5 Phase 5: Testing
 
-**Goal:** Ensure OAuth flows work correctly.
+**Goal:** Ensure full coverage and end-to-end flow correctness.
 
 **Tasks:**
-1. Write unit tests for OAuth strategies
-2. Write unit tests for OAuth service
-3. Write E2E tests for OAuth flows
+1. Unit tests for `OAuthProcessorService` (mocking database, encryption).
+2. Unit tests for strategies (mocking `OAuthProcessorService`).
+3. E2E tests using `supertest` and `nock` to mock external provider responses (Google/LinkedIn).
+   - Test successful new user creation.
+   - Test successful existing user login.
+   - Test missing email error.
+   - Test invalid token error.
 
 ---
 
 ## 4. API Design
 
-### 4.1 Google OAuth Initiation
+*No changes to the public API endpoints; they remain as provided by `@nestjs/social-auth`.*
 
-```
-GET /auth/google
-
-Description: Initiates Google OAuth flow
-Redirects: Google OAuth consent screen
-Scopes: profile, email
-```
-
-### 4.2 Google OAuth Callback
-
-```
-GET /auth/google/callback?code={code}
-
-Description: Handles Google OAuth callback
-Success: Redirects to frontend with JWT tokens
-Failure: Redirects to error page or returns error response
-```
-
-### 4.3 LinkedIn OAuth Initiation
-
-```
-GET /auth/linkedin
-
-Description: Initiates LinkedIn OAuth flow
-Redirects: LinkedIn OAuth consent screen
-Scopes: profile, email
-```
-
-### 4.4 LinkedIn OAuth Callback
-
-```
-GET /auth/linkedin/callback?code={code}
-
-Description: Handles LinkedIn OAuth callback
-Success: Redirects to frontend with JWT tokens
-Failure: Redirects to error page or returns error response
-```
+| Endpoint | Method | Description | Public |
+|----------|--------|-------------|--------|
+| `/auth/google` | GET | Initiates Google OAuth flow | Yes |
+| `/auth/google/callback` | GET | Handles Google OAuth callback | Yes |
+| `/auth/linkedin` | GET | Initiates LinkedIn OAuth flow | Yes |
+| `/auth/linkedin/callback` | GET | Handles LinkedIn OAuth callback | Yes |
 
 ---
 
-## 5. OAuth Strategy Implementation
+## 5. Core Service Implementation Details
 
-### 5.1 Google Strategy
+### 5.1 OAuthProcessorService (Pseudo-code)
 
 ```typescript
-// src/modules/auth/strategies/google.strategy.ts
-
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, VerifyCallback } from 'passport-google-oauth20';
-import { AuthService } from '../services/auth.service';
-
 @Injectable()
-export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
+export class OAuthProcessorService {
   constructor(
-    private readonly configService: ConfigService,
-    private readonly authService: AuthService,
-  ) {
-    super({
-      clientID: configService.get<string>('google.clientId'),
-      clientSecret: configService.get<string>('google.clientSecret'),
-      callbackURL: configService.get<string>('google.callbackUrl'),
-      scope: ['profile', 'email'],
-    });
-  }
+    private prisma: PrismaService,
+    private encryptionService: EncryptionService,
+    private jwtService: JwtService,
+  ) {}
 
-  async validate(
-    accessToken: string,
-    refreshToken: string,
-    profile: any,
-    done: VerifyCallback,
-  ): Promise<any> {
-    try {
-      const user = await this.authService.handleOAuthLogin({
-        provider: 'google',
-        providerUserId: profile.id,
-        email: profile.emails?.[0]?.value,
-        firstName: profile.name?.givenName,
-        lastName: profile.name?.familyName,
-        accessToken,
-        refreshToken,
-      });
-      
-      done(null, user);
-    } catch (error) {
-      done(error, null);
-    }
-  }
-}
-```
-
-### 5.2 LinkedIn Strategy
-
-```typescript
-// src/modules/auth/strategies/linkedin.strategy.ts
-
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, VerifyCallback } from 'passport-linkedin-oauth2';
-import { AuthService } from '../services/auth.service';
-
-@Injectable()
-export class LinkedInStrategy extends PassportStrategy(Strategy, 'linkedin') {
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly authService: AuthService,
-  ) {
-    super({
-      clientID: configService.get<string>('linkedin.clientId'),
-      clientSecret: configService.get<string>('linkedin.clientSecret'),
-      callbackURL: configService.get<string>('linkedin.callbackUrl'),
-      scope: ['profile', 'email'],
-    });
-  }
-
-  async validate(
-    accessToken: string,
-    refreshToken: string,
-    profile: any,
-    done: VerifyCallback,
-  ): Promise<any> {
-    try {
-      const user = await this.authService.handleOAuthLogin({
-        provider: 'linkedin',
-        providerUserId: profile.id,
-        email: profile.emails?.[0]?.value,
-        firstName: profile.name?.givenName,
-        lastName: profile.name?.familyName,
-        accessToken,
-        refreshToken,
-      });
-      
-      done(null, user);
-    } catch (error) {
-      done(error, null);
-    }
-  }
-}
-```
-
----
-
-## 6. OAuth Service Implementation
-
-```typescript
-// src/modules/auth/services/oauth.service.ts
-
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import * as crypto from 'crypto';
-
-interface OAuthLoginData {
-  provider: string;
-  providerUserId: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  accessToken: string;
-  refreshToken?: string;
-}
-
-@Injectable()
-export class OAuthService {
-  constructor(private readonly prisma: PrismaService) {}
-
-  async handleOAuthLogin(data: OAuthLoginData) {
+  async processOAuthLogin(data: OAuthLoginData) {
     const { provider, providerUserId, email, firstName, lastName, accessToken, refreshToken } = data;
 
-    // Encrypt tokens
-    const encryptedAccessToken = this.encryptToken(accessToken);
-    const encryptedRefreshToken = refreshToken ? this.encryptToken(refreshToken) : null;
+    // 1. Validate Email
+    if (!email) {
+      throw new BadRequestException(
+        'Unable to retrieve email from the provider. Please ensure your email is public or use another login method.'
+      );
+    }
 
-    // Check if OAuth identity exists
+    // 2. Encrypt Tokens
+    const encryptedAccess = this.encryptionService.encrypt(accessToken);
+    const encryptedRefresh = refreshToken ? this.encryptionService.encrypt(refreshToken) : null;
+
+    // 3. Check Existing Identity
     let identity = await this.prisma.oauthIdentities.findUnique({
       where: { provider_providerUserId: { provider, providerUserId } },
       include: { user: true },
     });
 
     if (identity) {
-      // Update tokens
-      identity = await this.prisma.oauthIdentities.update({
+      // Update tokens and return user
+      await this.prisma.oauthIdentities.update({
         where: { id: identity.id },
-        data: {
-          accessTokenRef: encryptedAccessToken,
-          refreshTokenRef: encryptedRefreshToken,
-          updatedAt: new Date(),
-        },
-        include: { user: true },
+        data: { accessTokenRef: encryptedAccess, refreshTokenRef: encryptedRefresh },
       });
       return identity.user;
     }
 
-    // Check if user exists with this email
-    let user = await this.prisma.users.findUnique({
-      where: { email },
-    });
+    // 4. Check Existing User by Email
+    let user = await this.prisma.users.findUnique({ where: { email } });
 
     if (user) {
-      // Link OAuth identity to existing user
+      // Link identity
       await this.prisma.oauthIdentities.create({
-        data: {
-          userId: user.id,
-          provider,
-          providerUserId,
-          accessTokenRef: encryptedAccessToken,
-          refreshTokenRef: encryptedRefreshToken,
-          linkedAt: new Date(),
-        },
+        data: { userId: user.id, provider, providerUserId, accessTokenRef: encryptedAccess, refreshTokenRef: encryptedRefresh },
       });
       return user;
     }
 
-    // Create new user
+    // 5. Create New User
     user = await this.prisma.users.create({
       data: {
         email,
@@ -373,110 +237,68 @@ export class OAuthService {
         isActive: true,
         userProfile: {
           create: {
-            fullName: `${firstName} ${lastName}`.trim(),
-            isDraft: false,
+            fullName: `${firstName || ''} ${lastName || ''}`.trim(),
+            isDraft: true, // KEY: User must complete onboarding
           },
         },
         oauthIdentities: {
-          create: {
-            provider,
-            providerUserId,
-            accessTokenRef: encryptedAccessToken,
-            refreshTokenRef: encryptedRefreshToken,
-            linkedAt: new Date(),
-          },
+          create: { provider, providerUserId, accessTokenRef: encryptedAccess, refreshTokenRef: encryptedRefresh },
         },
       },
     });
 
-    // Assign default 'user' role
-    const userRole = await this.prisma.roles.findUnique({
-      where: { name: 'user' },
-    });
-
+    // 6. Assign Default Role
+    const userRole = await this.prisma.roles.findUnique({ where: { name: 'user' } });
     if (userRole) {
-      await this.prisma.userRoles.create({
-        data: {
-          userId: user.id,
-          roleId: userRole.id,
-        },
-      });
+      await this.prisma.userRoles.create({ data: { userId: user.id, roleId: userRole.id } });
+    } else {
+      // Fail-safe: Log critical error (should be seeded)
+      console.error('CRITICAL: Default role "user" not found.');
+      // Optionally create it on the fly, but seeding is preferred.
     }
 
     return user;
-  }
-
-  private encryptToken(token: string): string {
-    const key = process.env.OAUTH_ENCRYPTION_KEY || 'default-key-change-in-production';
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-cbc', Buffer.from(key, 'hex'), iv);
-    let encrypted = cipher.update(token);
-    encrypted = Buffer.concat([encrypted, cipher.final()]);
-    return iv.toString('hex') + ':' + encrypted.toString('hex');
-  }
-
-  private decryptToken(encryptedToken: string): string {
-    const parts = encryptedToken.split(':');
-    const iv = Buffer.from(parts[0], 'hex');
-    const encrypted = Buffer.from(parts[1], 'hex');
-    const key = process.env.OAUTH_ENCRYPTION_KEY || 'default-key-change-in-production';
-    const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(key, 'hex'), iv);
-    let decrypted = decipher.update(encrypted);
-    decrypted = Buffer.concat([decrypted, decipher.final()]);
-    return decrypted.toString();
   }
 }
 ```
 
 ---
 
-## 7. Database Schema Updates
+## 6. Database Schema Updates
 
-### 7.1 OauthIdentities Table (Already Added in Feature 001)
+**No changes are required** to the database schema. The `OauthIdentities` table and its fields (`accessTokenRef`, `refreshTokenRef`) already exist as per `Levora_Database_Design_v1.2_MVP.md`.
 
-The `OauthIdentities` model is already defined in the schema. Verification:
-
-```sql
-SELECT EXISTS (
-  SELECT FROM information_schema.tables
-  WHERE table_name = 'oauth_identities'
-);
-```
-
-### 7.2 Encrypted Token Storage
-
-```typescript
-// Token encryption format
-// <iv>:<encrypted-token>
-// iv: 32 character hex string (16 bytes)
-// encrypted-token: hex string of encrypted data
-```
+**Required Seed Data:**
+- Ensure the `roles` table contains at least the `user` role. If not, add a seed script (`prisma/seed.ts`).
 
 ---
 
-## 8. Testing Plan
+## 7. Testing Plan
 
-### 8.1 Unit Tests
+### 7.1 Unit Tests
 
 | Test Suite | Target | Coverage Goal |
 |------------|--------|---------------|
-| GoogleStrategy | validate method | ≥ 80% |
-| LinkedInStrategy | validate method | ≥ 80% |
-| OAuthService | handleOAuthLogin | ≥ 80% |
+| EncryptionService | encrypt/decrypt methods | 100% |
+| OauthIdentityService | CRUD operations | ≥ 80% |
+| OAuthProcessorService | All business logic branches | ≥ 90% |
 
-### 8.2 E2E Tests
+### 7.2 E2E Tests (Using `nock`)
 
-| Test Suite | Endpoints to Test |
-|------------|-------------------|
-| Google OAuth Flow | GET /auth/google → redirect → callback |
-| LinkedIn OAuth Flow | GET /auth/linkedin → redirect → callback |
-| OAuth Error Handling | Invalid tokens, missing data |
+Mock external API calls to Google and LinkedIn. This isolates our logic from external network flakiness.
+
+| Test Case | Provider | Steps | Expected Result |
+|-----------|----------|-------|-----------------|
+| New User Signup | Google | Mock provider returns valid profile with email. | User created, JWT returned, `isDraft: true`. |
+| Existing User Login | LinkedIn | Mock provider returns email of an existing user. | User linked, JWT returned. |
+| Missing Email | Google | Mock provider returns profile without email. | 400 Bad Request with error message. |
+| Invalid Code | LinkedIn | Mock provider returns error. | 400/500 error, logged. |
 
 ---
 
-## 9. Configuration
+## 8. Configuration
 
-### 9.1 Environment Variables (.env.example additions)
+### 8.1 Environment Variables (.env.example additions)
 
 ```env
 # Google OAuth
@@ -489,11 +311,11 @@ LINKEDIN_CLIENT_ID="your-linkedin-client-id"
 LINKEDIN_CLIENT_SECRET="your-linkedin-client-secret"
 LINKEDIN_CALLBACK_URL="http://localhost:3000/api/auth/linkedin/callback"
 
-# OAuth Token Encryption
-OAUTH_ENCRYPTION_KEY="64-character-hex-encryption-key"
+# OAuth Token Encryption (Generate with: node -e "console.log(crypto.randomBytes(32).toString('hex'))")
+OAUTH_ENCRYPTION_KEY="a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890"
 ```
 
-### 9.2 Configuration Module Updates
+### 8.2 Configuration Module Updates
 
 ```typescript
 // config/configuration.ts
@@ -509,31 +331,29 @@ export default () => ({
     clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
     callbackUrl: process.env.LINKEDIN_CALLBACK_URL,
   },
-  oauth: {
-    encryptionKey: process.env.OAUTH_ENCRYPTION_KEY,
-  },
 });
 ```
 
 ---
 
-## 10. Quality Gates
+## 9. Quality Gates
 
 | Gate | Check | Pass/Fail |
 |------|-------|-----------|
 | Gate 1 | `pnpm lint` passes with no errors | [ ] |
 | Gate 2 | `pnpm test` passes with ≥80% coverage | [ ] |
 | Gate 3 | `pnpm build` completes successfully | [ ] |
-| Gate 4 | Google OAuth flow works end-to-end | [ ] |
-| Gate 5 | LinkedIn OAuth flow works end-to-end | [ ] |
-| Gate 6 | OAuth identities stored correctly | [ ] |
-| Gate 7 | Tokens encrypted before storage | [ ] |
-| Gate 8 | New users created with profiles | [ ] |
+| Gate 4 | Default role `user` exists in database (checked via seed) | [ ] |
+| Gate 5 | Google OAuth flow works end-to-end (manual + E2E) | [ ] |
+| Gate 6 | LinkedIn OAuth flow works end-to-end (manual + E2E) | [ ] |
+| Gate 7 | OAuth identities stored correctly with encrypted tokens | [ ] |
+| Gate 8 | New users created with `isDraft: true` profile | [ ] |
 | Gate 9 | Existing users linked correctly | [ ] |
+| Gate 10 | Missing email returns a clear error message | [ ] |
 
 ---
 
-## 11. References
+## 10. References
 
 - [Levora Database Design v1.2](../database/Levora_Database_Design_v1.2_MVP.md)
 - [System Architecture Design v2.0](../architecture/System_Architecture_Design.md)
@@ -541,6 +361,4 @@ export default () => ({
 - [SRS v1.0 Section 3.1](../requirements/Levora_SRS.md#31-authentication-account-management)
 - Feature 001: Project Setup & JWT Auth
 ```
-
----
 

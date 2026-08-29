@@ -888,6 +888,158 @@
 					}
 				}
 			]
+		},
+		{
+			"name": "4. OAuth Integration",
+			"description": "Smoke tests for OAuth 2.0 provider initiation endpoints (Google and LinkedIn).\n\n### Why Only Initiation Endpoints?\nOAuth callback endpoints (`/auth/:provider/callback`) require a real one-time authorization `code` issued by the provider after the user completes the browser consent flow. This code:\n- Cannot be generated or predicted programmatically\n- Expires within seconds and can only be used once\n- Requires an active browser session with the OAuth provider\n\nTherefore, callback testing is excluded from this smoke suite. Complete OAuth callback testing is covered in `test/oauth.e2e-spec.ts` using mocked guards and a real database.\n\n### Newman Cookie Isolation\nAll OAuth initiation tests clear the cookie jar before execution to prevent any auth cookies from a previous login step from leaking into these requests.",
+			"item": [
+				{
+					"name": "GET /auth/unsupported-provider - Unsupported OAuth Provider (400 Bad Request)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear cookies from the cookie jar before this unauthenticated request.",
+									"// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
+									"pm.cookies.clear();",
+									"pm.request.headers.remove('Cookie');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 400 Bad Request for unsupported provider', function () {",
+									"    pm.response.to.have.status(400);",
+									"});",
+									"pm.test('Response contains unsupported provider message', function () {",
+									"    var jsonData = pm.response.json();",
+									"    pm.expect(jsonData.message).to.include('is not supported');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/auth/unsupported-provider",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"unsupported-provider"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET /auth/google - Initiate Google OAuth (302 Redirect)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear cookies from the cookie jar before this OAuth initiation request.",
+									"// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
+									"pm.cookies.clear();",
+									"pm.request.headers.remove('Cookie');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 302 Redirect', function () {",
+									"    pm.response.to.have.status(302);",
+									"});",
+									"pm.test('Location header points to accounts.google.com', function () {",
+									"    var location = pm.response.headers.get('Location');",
+									"    pm.expect(location).to.include('accounts.google.com');",
+									"});",
+									"pm.test('Location header contains expected OAuth scopes', function () {",
+									"    var location = pm.response.headers.get('Location');",
+									"    pm.expect(location).to.include('scope=');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/auth/google",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"google"
+							]
+						}
+					}
+				},
+				{
+					"name": "GET /auth/linkedin - Initiate LinkedIn OAuth (302 Redirect)",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									"// Clear cookies from the cookie jar before this OAuth initiation request.",
+									"// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
+									"pm.cookies.clear();",
+									"pm.request.headers.remove('Cookie');"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 302 Redirect', function () {",
+									"    pm.response.to.have.status(302);",
+									"});",
+									"pm.test('Location header points to linkedin.com', function () {",
+									"    var location = pm.response.headers.get('Location');",
+									"    pm.expect(location).to.include('linkedin.com');",
+									"});",
+									"pm.test('Location header contains expected OAuth scopes', function () {",
+									"    var location = pm.response.headers.get('Location');",
+									"    pm.expect(location).to.include('scope=');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/auth/linkedin",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"auth",
+								"linkedin"
+							]
+						}
+					}
+				}
+			]
 		}
 	]
 }

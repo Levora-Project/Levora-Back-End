@@ -3,11 +3,13 @@ import {
   Post,
   Get,
   Body,
+  Param,
   Req,
   Res,
   HttpCode,
   HttpStatus,
   UnauthorizedException,
+  BadRequestException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -16,6 +18,7 @@ import {
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
+  ApiParam,
 } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
@@ -31,15 +34,33 @@ import {
 import { Public, CurrentUser } from '@common/decorators';
 import { AuthGuard } from '@common/guards';
 import { ErrorResponse } from '@common/dto';
+import { OAuthGuard } from './guards/oauth.guard';
+import { OAuthService } from './services/oauth.service';
+import { OAuthProcessorService } from './services/oauth-processor.service';
 
 const ACCESS_COOKIE = 'accessToken';
 const REFRESH_COOKIE = 'refreshToken';
+
+interface PassportOAuthUser {
+  profile: {
+    id: string;
+    email?: string;
+    firstName?: string;
+    lastName?: string;
+    picture?: string;
+    provider: string;
+  };
+  refreshToken: string | null;
+  accessToken: string;
+}
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly oauthService: OAuthService,
+    private readonly oauthProcessorService: OAuthProcessorService,
     private readonly config: ConfigService,
   ) {}
 
@@ -188,5 +209,91 @@ export class AuthController {
   })
   getProfile(@CurrentUser('id') userId: string): Promise<UserResponseDto> {
     return this.authService.getMe(userId);
+  }
+
+  @Public()
+  @Get(':provider')
+  @UseGuards(OAuthGuard)
+  @ApiOperation({
+    summary: 'Initiate OAuth login with a provider (e.g. google, linkedin)',
+  })
+  @ApiParam({
+    name: 'provider',
+    description: 'OAuth provider name (google, linkedin)',
+  })
+  @ApiResponse({
+    status: 302,
+    description: 'Redirect to provider consent screen',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Unsupported provider',
+    type: ErrorResponse,
+  })
+  oauth(@Param('provider') provider: string): void {
+    const providerLower = provider.toLowerCase();
+
+    if (!this.oauthService.isProviderSupported(providerLower)) {
+      throw new BadRequestException(`Provider ${provider} is not supported`);
+    }
+
+    // The OAuth guard handles the redirect to the provider
+  }
+
+  @Public()
+  @Get(':provider/callback')
+  @UseGuards(OAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'OAuth callback endpoint for provider' })
+  @ApiParam({
+    name: 'provider',
+    description: 'OAuth provider name (google, linkedin)',
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      'OAuth authentication successful, returns tokens and user profile',
+    type: LoginResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Missing email or invalid parameters',
+    type: ErrorResponse,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Authentication failed',
+    type: ErrorResponse,
+  })
+  async oauthCallback(
+    @Param('provider') provider: string,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<LoginResponseDto> {
+    const passportUser = (req as Request & { user?: PassportOAuthUser }).user;
+
+    if (!passportUser || !passportUser.profile) {
+      throw new UnauthorizedException('Authentication failed');
+    }
+
+    const { profile, accessToken, refreshToken } = passportUser;
+
+    const result = await this.oauthProcessorService.processOAuthLogin({
+      provider: profile.provider || provider.toLowerCase(),
+      providerUserId: profile.id,
+      email: profile.email,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      picture: profile.picture,
+      accessToken,
+      refreshToken,
+    });
+
+    this.setTokenCookies(res, {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+    });
+
+    return result;
   }
 }

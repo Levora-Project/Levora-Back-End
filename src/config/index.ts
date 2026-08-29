@@ -4,3 +4,4 @@ export { logConfig } from './log.config';
 export { redisConfig } from './redis.config';
 export { securityConfig } from './security.config';
 export { uploadConfig } from './upload.config';
+export { oauthConfig } from './oauth.config';

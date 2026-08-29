@@ -16,6 +16,7 @@ import {
   redisConfig,
   securityConfig,
   uploadConfig,
+  oauthConfig,
 } from '@config/index';
 import { PrismaModule } from '@/prisma';
 import { RedisModule } from '@/redis';
@@ -37,6 +38,7 @@ import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
         redisConfig,
         securityConfig,
         uploadConfig,
+        oauthConfig,
       ],
       envFilePath: ['.env'],
     }),
