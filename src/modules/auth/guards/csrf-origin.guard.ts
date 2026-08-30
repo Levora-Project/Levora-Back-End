@@ -26,7 +26,7 @@ export class CsrfOriginGuard implements CanActivate {
       this.configService.get<string>('app.NODE_ENV') !== 'production';
 
     // 1. Extract origin
-    let origin = request.headers.origin;
+    let origin: string | string[] | undefined = request.headers.origin;
 
     if (!origin && request.headers.referer) {
       try {
@@ -38,7 +38,7 @@ export class CsrfOriginGuard implements CanActivate {
     }
 
     if (Array.isArray(origin)) {
-      origin = origin[0];
+      origin = origin[0] as string | undefined;
     }
 
     if (typeof origin === 'string' && origin.length > 2000) {

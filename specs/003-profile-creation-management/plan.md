@@ -13,25 +13,25 @@
 
 ### 1.1 Technology Stack
 
-| Layer | Technology | Version |
-|-------|------------|---------|
-| Backend Framework | NestJS | ^10.0.0 |
-| Database ORM | Prisma | ^5.0.0 |
-| Database | PostgreSQL | 15+ |
-| File Storage | AWS S3 or Local | Configurable |
-| File Encryption | Node.js Crypto (AES-256-CBC) | Built-in |
-| Testing | Jest | ^29.0.0 |
-| API Documentation | Swagger/OpenAPI | ^7.0.0 |
+| Layer             | Technology                   | Version      |
+| ----------------- | ---------------------------- | ------------ |
+| Backend Framework | NestJS                       | ^10.0.0      |
+| Database ORM      | Prisma                       | ^5.0.0       |
+| Database          | PostgreSQL                   | 15+          |
+| File Storage      | AWS S3 or Local              | Configurable |
+| File Encryption   | Node.js Crypto (AES-256-CBC) | Built-in     |
+| Testing           | Jest                         | ^29.0.0      |
+| API Documentation | Swagger/OpenAPI              | ^7.0.0       |
 
 ### 1.2 Architecture Patterns
 
-| Pattern | Description |
-|---------|-------------|
+| Pattern              | Description                                                     |
+| -------------------- | --------------------------------------------------------------- |
 | Modular Architecture | Profile module with controllers, services, DTOs, and utilities. |
-| Strategy Pattern | Storage service abstraction (S3 vs Local). |
-| DTO Pattern | Request/Response data transfer objects with validation. |
-| Repository Pattern | Prisma for data access. |
-| Utility Functions | GPA normalization in shared utils. |
+| Strategy Pattern     | Storage service abstraction (S3 vs Local).                      |
+| DTO Pattern          | Request/Response data transfer objects with validation.         |
+| Repository Pattern   | Prisma for data access.                                         |
+| Utility Functions    | GPA normalization in shared utils.                              |
 
 ### 1.3 Prerequisites
 
@@ -116,6 +116,7 @@ src/
 **Goal:** Add reference tables, seed data, and create module skeleton.
 
 **Tasks:**
+
 1. Add `FieldOfStudy` and `Skill` models to Prisma schema (or extend `SkillsMaster`).
 2. Create seed script with initial fields of study and skills taxonomy.
 3. Run migration and seed.
@@ -123,6 +124,7 @@ src/
 5. Implement `ReferenceService` with `GET /reference/fields-of-study` and `GET /reference/skills-taxonomy`.
 
 **Success Criteria:**
+
 - Reference tables exist in database.
 - Seed data populated.
 - Reference endpoints return expected data.
@@ -132,6 +134,7 @@ src/
 **Goal:** Implement profile retrieval and partial updates.
 
 **Tasks:**
+
 1. Implement `ProfileService.getProfile(userId)` returning profile with calculated fields.
 2. Implement `ProfileService.updateProfile(userId, data)` with validation.
 3. Add core fields validation and `coreFieldsComplete` calculation.
@@ -140,6 +143,7 @@ src/
 6. Implement `GET /profile` and `PATCH /profile` endpoints.
 
 **Success Criteria:**
+
 - Profile retrieval works for authenticated users.
 - Partial updates apply correctly.
 - Core fields validation works.
@@ -150,6 +154,7 @@ src/
 **Goal:** Implement GPA normalization utility and integrate with profile updates.
 
 **Tasks:**
+
 1. Create `src/common/utils/gpa-normalizer.ts` with:
    - `normalizeGPA(value, scale): number`
    - `validateGPARange(value, scale): boolean`
@@ -159,6 +164,7 @@ src/
 4. Add scale validation and rejection of invalid ranges.
 
 **Success Criteria:**
+
 - All GPA scales convert correctly.
 - Invalid values rejected with 400.
 - Utility functions 100% unit tested.
@@ -168,6 +174,7 @@ src/
 **Goal:** Implement storage abstraction with S3 and Local providers.
 
 **Tasks:**
+
 1. Define `StorageService` interface.
 2. Implement `S3StorageService` using AWS SDK.
 3. Implement `LocalStorageService` using Node.js `fs`.
@@ -175,6 +182,7 @@ src/
 5. Add configuration validation at startup.
 
 **Success Criteria:**
+
 - Storage service initialized based on `STORAGE_PROVIDER`.
 - Both providers implement upload, download, delete, and signed URL methods.
 - Configuration validation fails fast on misconfiguration.
@@ -184,6 +192,7 @@ src/
 **Goal:** Implement document upload, download, and delete with security.
 
 **Tasks:**
+
 1. Implement `DocumentsService` with encryption/decryption.
 2. Add file validation (MIME via file-type, size, count).
 3. Implement `POST /profile/documents` with multer.
@@ -192,6 +201,7 @@ src/
 6. Add ownership checks for all operations.
 
 **Success Criteria:**
+
 - Upload validates MIME via magic bytes.
 - Files encrypted and stored outside web root.
 - Signed URLs read-only with 5-minute expiration.
@@ -202,6 +212,7 @@ src/
 **Goal:** Ensure quality and provide documentation.
 
 **Tasks:**
+
 1. Write unit tests for `ProfileService` (≥80% coverage).
 2. Write unit tests for GPA utility (100% coverage).
 3. Write E2E tests for all profile endpoints.
@@ -209,6 +220,7 @@ src/
 5. Run lint, tests, and build checks.
 
 **Success Criteria:**
+
 - All tests pass.
 - Coverage goals met.
 - Swagger UI shows all endpoints.
@@ -221,12 +233,14 @@ src/
 ### 4.1 GET /profile
 
 **Request:**
+
 ```
 GET /profile
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "statusCode": 200,
@@ -264,6 +278,7 @@ Authorization: Bearer <token>
 ### 4.2 PATCH /profile
 
 **Request:**
+
 ```
 PATCH /profile
 Authorization: Bearer <token>
@@ -277,6 +292,7 @@ Content-Type: application/json
 ```
 
 **Response (200):**
+
 ```json
 {
   "statusCode": 200,
@@ -294,6 +310,7 @@ Content-Type: application/json
 ### 4.3 POST /profile/documents
 
 **Request:**
+
 ```
 POST /profile/documents
 Authorization: Bearer <token>
@@ -304,6 +321,7 @@ documentType: resume
 ```
 
 **Response (201):**
+
 ```json
 {
   "statusCode": 201,
@@ -324,12 +342,14 @@ documentType: resume
 ### 4.4 GET /profile/documents/:id/download
 
 **Request:**
+
 ```
 GET /profile/documents/:id/download
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "statusCode": 200,
@@ -345,12 +365,14 @@ Authorization: Bearer <token>
 ### 4.5 DELETE /profile/documents/:id
 
 **Request:**
+
 ```
 DELETE /profile/documents/:id
 Authorization: Bearer <token>
 ```
 
 **Response (200):**
+
 ```json
 {
   "statusCode": 200,
@@ -363,11 +385,13 @@ Authorization: Bearer <token>
 ### 4.6 GET /reference/fields-of-study
 
 **Request:**
+
 ```
 GET /reference/fields-of-study
 ```
 
 **Response (200):**
+
 ```json
 {
   "statusCode": 200,
@@ -383,11 +407,13 @@ GET /reference/fields-of-study
 ### 4.7 GET /reference/skills-taxonomy
 
 **Request:**
+
 ```
 GET /reference/skills-taxonomy
 ```
 
 **Response (200):**
+
 ```json
 {
   "statusCode": 200,
@@ -402,9 +428,7 @@ GET /reference/skills-taxonomy
     },
     {
       "category": "Business",
-      "skills": [
-        { "id": "uuid", "name": "Project Management" }
-      ]
+      "skills": [{ "id": "uuid", "name": "Project Management" }]
     }
   ],
   "timestamp": "2026-08-30T10:00:00.000Z"
@@ -423,7 +447,7 @@ model FieldOfStudy {
   name      String   @unique @db.Text
   category  String?  @db.Text
   isActive  Boolean  @default(true) @map("is_active")
-  
+
   @@map("fields_of_study")
 }
 
@@ -433,9 +457,9 @@ model Skill {
   name        String   @unique @db.Citext
   category    String   @db.Text  // Tech, Business, Arts, Science, Engineering, Healthcare
   isActive    Boolean  @default(true) @map("is_active")
-  
+
   userSkills  UserSkills[]
-  
+
   @@map("skills")
 }
 
@@ -562,7 +586,8 @@ export default () => ({
     limits: {
       maxFileSizeMB: parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 5,
       maxDocuments: parseInt(process.env.MAX_DOCUMENTS_PER_USER, 10) || 20,
-      signedUrlExpires: parseInt(process.env.SIGNED_URL_EXPIRES_SECONDS, 10) || 300,
+      signedUrlExpires:
+        parseInt(process.env.SIGNED_URL_EXPIRES_SECONDS, 10) || 300,
     },
   },
 });
@@ -572,14 +597,14 @@ export default () => ({
 
 ## 7. Security Considerations
 
-| Concern | Implementation |
-|---------|----------------|
+| Concern                   | Implementation                                                                                                      |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | **Malicious File Upload** | Validate MIME type via file signature (magic bytes) using `file-type`. Reject if signature doesn't match extension. |
-| **Code Injection** | Store files outside web root. Never execute uploaded files. Rename to UUID. Encrypt content. |
-| **Unauthorized Access** | All endpoints protected by JWT. Ownership checks on all document operations. RLS at database level. |
-| **Signed URL Leakage** | Short expiration (5 min). Read-only permissions. Requires authentication to generate. |
-| **Encryption Key** | Stored in environment variable, never in code. Validated at startup. |
-| **Path Traversal** | Use UUID for storage paths. Never use user-provided filenames for storage. |
+| **Code Injection**        | Store files outside web root. Never execute uploaded files. Rename to UUID. Encrypt content.                        |
+| **Unauthorized Access**   | All endpoints protected by JWT. Ownership checks on all document operations. RLS at database level.                 |
+| **Signed URL Leakage**    | Short expiration (5 min). Read-only permissions. Requires authentication to generate.                               |
+| **Encryption Key**        | Stored in environment variable, never in code. Validated at startup.                                                |
+| **Path Traversal**        | Use UUID for storage paths. Never use user-provided filenames for storage.                                          |
 
 ---
 
@@ -587,36 +612,36 @@ export default () => ({
 
 ### 8.1 Unit Tests
 
-| Test Suite | Target | Coverage |
-|------------|--------|----------|
-| `gpa-normalizer.spec.ts` | All normalization scenarios | 100% |
-| `profile.service.spec.ts` | CRUD, validation, completion % | ≥80% |
-| `documents.service.spec.ts` | Upload, download, delete, encryption | ≥80% |
-| `reference.service.spec.ts` | Reference data retrieval | ≥80% |
+| Test Suite                  | Target                               | Coverage |
+| --------------------------- | ------------------------------------ | -------- |
+| `gpa-normalizer.spec.ts`    | All normalization scenarios          | 100%     |
+| `profile.service.spec.ts`   | CRUD, validation, completion %       | ≥80%     |
+| `documents.service.spec.ts` | Upload, download, delete, encryption | ≥80%     |
+| `reference.service.spec.ts` | Reference data retrieval             | ≥80%     |
 
 ### 8.2 E2E Tests
 
-| Test Suite | Endpoints Tested |
-|------------|------------------|
-| `profile.e2e-spec.ts` | GET /profile, PATCH /profile |
+| Test Suite              | Endpoints Tested                   |
+| ----------------------- | ---------------------------------- |
+| `profile.e2e-spec.ts`   | GET /profile, PATCH /profile       |
 | `documents.e2e-spec.ts` | POST/GET/DELETE /profile/documents |
-| `reference.e2e-spec.ts` | GET /reference/* |
+| `reference.e2e-spec.ts` | GET /reference/*                   |
 
 ---
 
 ## 9. Quality Gates
 
-| Gate | Check | Pass/Fail |
-|------|-------|-----------|
-| Gate 1 | `pnpm lint` passes with no errors | [ ] |
-| Gate 2 | `pnpm test` passes with ≥80% coverage | [ ] |
-| Gate 3 | `pnpm build` completes successfully | [ ] |
-| Gate 4 | GPA utility 100% unit tested | [ ] |
-| Gate 5 | Swagger UI shows all endpoints | [ ] |
-| Gate 6 | Document upload with encryption works | [ ] |
-| Gate 7 | Signed URL generation works | [ ] |
-| Gate 8 | Ownership checks enforce isolation | [ ] |
-| Gate 9 | Reference data seeded correctly | [ ] |
+| Gate   | Check                                 | Pass/Fail |
+| ------ | ------------------------------------- | --------- |
+| Gate 1 | `pnpm lint` passes with no errors     | [ ]       |
+| Gate 2 | `pnpm test` passes with ≥80% coverage | [ ]       |
+| Gate 3 | `pnpm build` completes successfully   | [ ]       |
+| Gate 4 | GPA utility 100% unit tested          | [ ]       |
+| Gate 5 | Swagger UI shows all endpoints        | [ ]       |
+| Gate 6 | Document upload with encryption works | [ ]       |
+| Gate 7 | Signed URL generation works           | [ ]       |
+| Gate 8 | Ownership checks enforce isolation    | [ ]       |
+| Gate 9 | Reference data seeded correctly       | [ ]       |
 
 ---
 

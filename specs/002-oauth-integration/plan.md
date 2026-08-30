@@ -1,4 +1,3 @@
-
 ```markdown
 # Implementation Plan: OAuth Integration (Google + LinkedIn)
 
@@ -15,25 +14,25 @@
 
 ### 1.1 Technology Stack
 
-| Layer | Technology | Version |
-|-------|------------|---------|
-| Backend Framework | NestJS | ^10.0.0 |
-| Authentication | @nestjs/social-auth (existing), Passport.js | ^0.6.0 |
-| OAuth Strategies | passport-google-oauth20, passport-linkedin-oauth2 | ^2.0.0 |
-| Database ORM | Prisma | ^5.0.0 |
-| Database | PostgreSQL | 15+ |
-| Encryption | Crypto (Node.js built-in) | - |
-| Testing (E2E) | nock | ^13.0.0 |
+| Layer             | Technology                                        | Version |
+| ----------------- | ------------------------------------------------- | ------- |
+| Backend Framework | NestJS                                            | ^10.0.0 |
+| Authentication    | @nestjs/social-auth (existing), Passport.js       | ^0.6.0  |
+| OAuth Strategies  | passport-google-oauth20, passport-linkedin-oauth2 | ^2.0.0  |
+| Database ORM      | Prisma                                            | ^5.0.0  |
+| Database          | PostgreSQL                                        | 15+     |
+| Encryption        | Crypto (Node.js built-in)                         | -       |
+| Testing (E2E)     | nock                                              | ^13.0.0 |
 
 ### 1.2 Architecture Patterns
 
-| Pattern | Description |
-|---------|-------------|
-| Adapter Pattern | Wrap `@nestjs/social-auth` strategies with custom business logic. |
-| Strategy Pattern | OAuth strategies for different providers. |
-| Dependency Injection | NestJS DI for service composition. |
-| Repository Pattern | Prisma for data access. |
-| Factory Pattern | User creation from OAuth profile data via `OAuthProcessorService`. |
+| Pattern              | Description                                                        |
+| -------------------- | ------------------------------------------------------------------ |
+| Adapter Pattern      | Wrap `@nestjs/social-auth` strategies with custom business logic.  |
+| Strategy Pattern     | OAuth strategies for different providers.                          |
+| Dependency Injection | NestJS DI for service composition.                                 |
+| Repository Pattern   | Prisma for data access.                                            |
+| Factory Pattern      | User creation from OAuth profile data via `OAuthProcessorService`. |
 
 ---
 
@@ -42,61 +41,64 @@
 ### 2.1 Module Structure (Additions to Auth Module)
 
 We will leverage the existing `@nestjs/social-auth` module configuration. Our custom logic will reside in new services.
-
 ```
+
 src/modules/auth/
-├── strategies/                     # (Existing, from social-auth)
-│   ├── google.strategy.ts          # Already configured by social-auth
-│   └── linkedin.strategy.ts        # Already configured by social-auth
+├── strategies/ # (Existing, from social-auth)
+│ ├── google.strategy.ts # Already configured by social-auth
+│ └── linkedin.strategy.ts # Already configured by social-auth
 ├── services/
-│   ├── auth.service.ts             # Extended with OAuth methods
-│   ├── oauth-processor.service.ts  # NEW: Core OAuth business logic (creation, linking, encryption)
-│   ├── encryption.service.ts       # NEW: Token encryption/decryption
-│   └── oauth-identity.service.ts   # NEW: CRUD for OauthIdentities
+│ ├── auth.service.ts # Extended with OAuth methods
+│ ├── oauth-processor.service.ts # NEW: Core OAuth business logic (creation, linking, encryption)
+│ ├── encryption.service.ts # NEW: Token encryption/decryption
+│ └── oauth-identity.service.ts # NEW: CRUD for OauthIdentities
 ├── controllers/
-│   └── auth.controller.ts          # Extended with OAuth endpoints (already present from social-auth)
+│ └── auth.controller.ts # Extended with OAuth endpoints (already present from social-auth)
 ├── guards/
-│   └── oauth.guard.ts              # Optional custom guard if needed
+│ └── oauth.guard.ts # Optional custom guard if needed
 └── interfaces/
-    └── oauth-profile.interface.ts  # NEW: Standardized OAuth profile interface
+└── oauth-profile.interface.ts # NEW: Standardized OAuth profile interface
+
 ```
 
 ### 2.2 OAuth Flow Diagram (Customized)
 
 ```
-┌─────────┐         ┌──────────────────────┐         ┌─────────────┐
-│  Client │         │     NestJS Auth      │         │   OAuth     │
-│         │         │       Module         │         │  Provider   │
-└────┬────┘         └──────────┬───────────┘         └──────┬──────┘
-     │                         │                            │
-     │ GET /auth/google        │                            │
-     ├────────────────────────>│                            │
-     │                         │                            │
-     │                         │ Redirect to Provider       │
-     │                         ├───────────────────────────>│
-     │                         │                            │
-     │                         │ Provider redirects to      │
-     │                         │ callback URL               │
-     │                         │<───────────────────────────┤
-     │                         │                            │
-     │                         │ social-auth validates code │
-     │                         │ and fetches profile        │
-     │                         ├───────────────────────────>│
-     │                         │                            │
-     │                         │ Profile + Tokens           │
-     │                         │<───────────────────────────┤
-     │                         │                            │
-     │                         │ --- OAuthProcessorService --- │
-     │                         │ 1. Check email present     │
-     │                         │ 2. Encrypt tokens          │
-     │                         │ 3. Find/Create User        │
-     │                         │ 4. Link/Link OAuth Identity│
-     │                         │ 5. Generate JWT            │
-     │                         │                            │
-     │ Redirect with JWT       │                            │
-     │<────────────────────────┤                            │
-     │                         │                            │
-```
+
+┌─────────┐ ┌──────────────────────┐ ┌─────────────┐
+│ Client │ │ NestJS Auth │ │ OAuth │
+│ │ │ Module │ │ Provider │
+└────┬────┘ └──────────┬───────────┘ └──────┬──────┘
+│ │ │
+│ GET /auth/google │ │
+├────────────────────────>│ │
+│ │ │
+│ │ Redirect to Provider │
+│ ├───────────────────────────>│
+│ │ │
+│ │ Provider redirects to │
+│ │ callback URL │
+│ │<───────────────────────────┤
+│ │ │
+│ │ social-auth validates code │
+│ │ and fetches profile │
+│ ├───────────────────────────>│
+│ │ │
+│ │ Profile + Tokens │
+│ │<───────────────────────────┤
+│ │ │
+│ │ --- OAuthProcessorService --- │
+│ │ 1. Check email present │
+│ │ 2. Encrypt tokens │
+│ │ 3. Find/Create User │
+│ │ 4. Link/Link OAuth Identity│
+│ │ 5. Generate JWT │
+│ │ │
+│ Redirect with JWT │ │
+│<────────────────────────┤ │
+│ │ │
+
+````
 
 ---
 
@@ -260,7 +262,7 @@ export class OAuthProcessorService {
     return user;
   }
 }
-```
+````
 
 ---
 
@@ -269,6 +271,7 @@ export class OAuthProcessorService {
 **No changes are required** to the database schema. The `OauthIdentities` table and its fields (`accessTokenRef`, `refreshTokenRef`) already exist as per `Levora_Database_Design_v1.2_MVP.md`.
 
 **Required Seed Data:**
+
 - Ensure the `roles` table contains at least the `user` role. If not, add a seed script (`prisma/seed.ts`).
 
 ---
@@ -277,22 +280,22 @@ export class OAuthProcessorService {
 
 ### 7.1 Unit Tests
 
-| Test Suite | Target | Coverage Goal |
-|------------|--------|---------------|
-| EncryptionService | encrypt/decrypt methods | 100% |
-| OauthIdentityService | CRUD operations | ≥ 80% |
-| OAuthProcessorService | All business logic branches | ≥ 90% |
+| Test Suite            | Target                      | Coverage Goal |
+| --------------------- | --------------------------- | ------------- |
+| EncryptionService     | encrypt/decrypt methods     | 100%          |
+| OauthIdentityService  | CRUD operations             | ≥ 80%         |
+| OAuthProcessorService | All business logic branches | ≥ 90%         |
 
 ### 7.2 E2E Tests (Using `nock`)
 
 Mock external API calls to Google and LinkedIn. This isolates our logic from external network flakiness.
 
-| Test Case | Provider | Steps | Expected Result |
-|-----------|----------|-------|-----------------|
-| New User Signup | Google | Mock provider returns valid profile with email. | User created, JWT returned, `isDraft: true`. |
-| Existing User Login | LinkedIn | Mock provider returns email of an existing user. | User linked, JWT returned. |
-| Missing Email | Google | Mock provider returns profile without email. | 400 Bad Request with error message. |
-| Invalid Code | LinkedIn | Mock provider returns error. | 400/500 error, logged. |
+| Test Case           | Provider | Steps                                            | Expected Result                              |
+| ------------------- | -------- | ------------------------------------------------ | -------------------------------------------- |
+| New User Signup     | Google   | Mock provider returns valid profile with email.  | User created, JWT returned, `isDraft: true`. |
+| Existing User Login | LinkedIn | Mock provider returns email of an existing user. | User linked, JWT returned.                   |
+| Missing Email       | Google   | Mock provider returns profile without email.     | 400 Bad Request with error message.          |
+| Invalid Code        | LinkedIn | Mock provider returns error.                     | 400/500 error, logged.                       |
 
 ---
 
@@ -338,18 +341,18 @@ export default () => ({
 
 ## 9. Quality Gates
 
-| Gate | Check | Pass/Fail |
-|------|-------|-----------|
-| Gate 1 | `pnpm lint` passes with no errors | [ ] |
-| Gate 2 | `pnpm test` passes with ≥80% coverage | [ ] |
-| Gate 3 | `pnpm build` completes successfully | [ ] |
-| Gate 4 | Default role `user` exists in database (checked via seed) | [ ] |
-| Gate 5 | Google OAuth flow works end-to-end (manual + E2E) | [ ] |
-| Gate 6 | LinkedIn OAuth flow works end-to-end (manual + E2E) | [ ] |
-| Gate 7 | OAuth identities stored correctly with encrypted tokens | [ ] |
-| Gate 8 | New users created with `isDraft: true` profile | [ ] |
-| Gate 9 | Existing users linked correctly | [ ] |
-| Gate 10 | Missing email returns a clear error message | [ ] |
+| Gate    | Check                                                     | Pass/Fail |
+| ------- | --------------------------------------------------------- | --------- |
+| Gate 1  | `pnpm lint` passes with no errors                         | [ ]       |
+| Gate 2  | `pnpm test` passes with ≥80% coverage                     | [ ]       |
+| Gate 3  | `pnpm build` completes successfully                       | [ ]       |
+| Gate 4  | Default role `user` exists in database (checked via seed) | [ ]       |
+| Gate 5  | Google OAuth flow works end-to-end (manual + E2E)         | [ ]       |
+| Gate 6  | LinkedIn OAuth flow works end-to-end (manual + E2E)       | [ ]       |
+| Gate 7  | OAuth identities stored correctly with encrypted tokens   | [ ]       |
+| Gate 8  | New users created with `isDraft: true` profile            | [ ]       |
+| Gate 9  | Existing users linked correctly                           | [ ]       |
+| Gate 10 | Missing email returns a clear error message               | [ ]       |
 
 ---
 
@@ -360,5 +363,7 @@ export default () => ({
 - [AGENTS.md](../AGENTS.md)
 - [SRS v1.0 Section 3.1](../requirements/Levora_SRS.md#31-authentication-account-management)
 - Feature 001: Project Setup & JWT Auth
+
 ```
 
+```

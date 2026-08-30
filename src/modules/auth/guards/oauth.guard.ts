@@ -50,14 +50,13 @@ export class OAuthGuard implements CanActivate {
 
   private createGuardClass(strategyName: string): new () => CanActivate {
     return class extends AuthGuard(strategyName) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      handleRequest<TUser = any>(err: any, user: any): TUser {
+      handleRequest<TUser = unknown>(err: unknown, user: unknown): TUser {
         if (err || !user) {
           throw new UnauthorizedException(
-            err?.message || 'Authentication failed',
+            err instanceof Error ? err.message : 'Authentication failed',
           );
         }
-        return user;
+        return user as TUser;
       }
     };
   }

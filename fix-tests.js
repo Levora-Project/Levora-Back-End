@@ -3,10 +3,13 @@ const file = './tests/levora-smoke-tests.json';
 const data = JSON.parse(fs.readFileSync(file, 'utf8'));
 
 // Find the OAuth folder (index 3 or similar)
-const oauthFolder = data.item.find(i => i.name.includes('OAuth'));
+const oauthFolder = data.item.find((i) => i.name.includes('OAuth'));
 if (oauthFolder) {
-  oauthFolder.item.forEach(req => {
-    if (req.name.includes('Initiate Google') || req.name.includes('Initiate LinkedIn')) {
+  oauthFolder.item.forEach((req) => {
+    if (
+      req.name.includes('Initiate Google') ||
+      req.name.includes('Initiate LinkedIn')
+    ) {
       req.protocolProfileBehavior = { followRedirects: false };
     }
   });

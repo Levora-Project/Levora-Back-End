@@ -467,7 +467,7 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
           SERVICE_ID: ${{ secrets.RENDER_PREVIEW_SERVICE_ID }}
-          BRANCH: "main"
+          BRANCH: 'main'
         run: |
           if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
             echo "::warn::RENDER_API_KEY_STAGING or RENDER_PREVIEW_SERVICE_ID is not configured. Skipping branch reset."

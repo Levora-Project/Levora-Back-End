@@ -498,7 +498,8 @@ jobs:
   # =========================================================================
   save-production-logs:
     name: Save Production Logs & Artifacts
-    needs: [deploy-production, wait-for-production, create-production-deployment]
+    needs:
+      [deploy-production, wait-for-production, create-production-deployment]
     if: always()
     runs-on: ubuntu-latest
     permissions:

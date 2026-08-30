@@ -38,6 +38,16 @@ describe('OAuth (e2e)', () => {
 
     prisma = app.get<PrismaService>(PrismaService);
     await app.init();
+
+    // Ensure 'user' role exists for tests
+    const defaultRole = await prisma.roles.findUnique({
+      where: { name: 'user' },
+    });
+    if (!defaultRole) {
+      await prisma.roles.create({
+        data: { id: 1, name: 'user', description: 'Standard user access' },
+      });
+    }
   });
 
   afterAll(async () => {

@@ -11,8 +11,16 @@ const prisma = new PrismaClient();
 
 const DEFAULT_ROLES = [
   { id: 1, name: 'user', description: 'Standard user access' },
-  { id: 2, name: 'content_admin', description: 'Content Administrator for managing opportunities' },
-  { id: 3, name: 'system_admin', description: 'Full system administrator access' },
+  {
+    id: 2,
+    name: 'content_admin',
+    description: 'Content Administrator for managing opportunities',
+  },
+  {
+    id: 3,
+    name: 'system_admin',
+    description: 'Full system administrator access',
+  },
 ];
 
 const DEFAULT_ADMIN = {
@@ -41,7 +49,9 @@ async function main() {
   });
 
   if (existing) {
-    console.log(`\n  ⏭ Admin "${DEFAULT_ADMIN.email}" already exists — skipping`);
+    console.log(
+      `\n  ⏭ Admin "${DEFAULT_ADMIN.email}" already exists — skipping`,
+    );
   } else {
     const hashedPassword = await bcrypt.hash(DEFAULT_ADMIN.password, 12);
 
