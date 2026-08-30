@@ -1,10 +1,5 @@
 import { LinkedInStrategy } from './linkedin.strategy';
-import * as providersConfig from '../config/providers.config';
-
-// Mock the providers config module
-jest.mock('../config/providers.config', () => ({
-  getProviderConfig: jest.fn(),
-}));
+import { ConfigService } from '@nestjs/config';
 
 // Mock PassportStrategy
 jest.mock('@nestjs/passport', () => {
@@ -19,39 +14,40 @@ jest.mock('@nestjs/passport', () => {
 });
 
 describe('LinkedInStrategy', () => {
-  const originalEnv = process.env;
+  let mockConfigService: Partial<ConfigService>;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env = { ...originalEnv };
-  });
-
-  afterAll(() => {
-    process.env = originalEnv;
+    mockConfigService = {
+      get: jest.fn(),
+    };
   });
 
   describe('constructor', () => {
-    it('should throw error when config is missing', () => {
-      (providersConfig.getProviderConfig as jest.Mock).mockReturnValue(
-        undefined,
-      );
+    it('should initialize with DISABLED when config is missing', () => {
+      (mockConfigService.get as jest.Mock).mockReturnValue(undefined);
 
-      expect(() => new LinkedInStrategy()).toThrow(
-        'LinkedIn OAuth configuration is missing',
-      );
+      const strategy = new LinkedInStrategy(mockConfigService as ConfigService);
+      expect(strategy).toBeDefined();
     });
 
     it('should initialize successfully with valid config', () => {
-      const mockConfig = {
-        clientId: 'test-linkedin-id',
-        clientSecret: 'test-linkedin-secret',
-        redirect: 'http://localhost:3000/api/v1/auth/linkedin/callback',
-      };
-      (providersConfig.getProviderConfig as jest.Mock).mockReturnValue(
-        mockConfig,
-      );
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'LINKEDIN_CLIENT_ID') {
+          return 'test-linkedin-id';
+        }
+        if (key === 'LINKEDIN_CLIENT_SECRET') {
+          return 'test-linkedin-secret';
+        }
+        if (key === 'LINKEDIN_CALLBACK_URL') {
+          return 'http://localhost:3000/api/v1/auth/linkedin/callback';
+        }
+        return undefined;
+      });
 
-      expect(() => new LinkedInStrategy()).not.toThrow();
+      expect(
+        () => new LinkedInStrategy(mockConfigService as ConfigService),
+      ).not.toThrow();
     });
   });
 
@@ -60,16 +56,20 @@ describe('LinkedInStrategy', () => {
     let mockDone: jest.Mock;
 
     beforeEach(() => {
-      const mockConfig = {
-        clientId: 'test-linkedin-id',
-        clientSecret: 'test-linkedin-secret',
-        redirect: 'http://localhost:3000/api/v1/auth/linkedin/callback',
-      };
-      (providersConfig.getProviderConfig as jest.Mock).mockReturnValue(
-        mockConfig,
-      );
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'LINKEDIN_CLIENT_ID') {
+          return 'test-linkedin-id';
+        }
+        if (key === 'LINKEDIN_CLIENT_SECRET') {
+          return 'test-linkedin-secret';
+        }
+        if (key === 'LINKEDIN_CALLBACK_URL') {
+          return 'http://localhost:3000/api/v1/auth/linkedin/callback';
+        }
+        return undefined;
+      });
 
-      strategy = new LinkedInStrategy();
+      strategy = new LinkedInStrategy(mockConfigService as ConfigService);
       mockDone = jest.fn();
     });
 

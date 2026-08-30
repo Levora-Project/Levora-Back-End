@@ -13,13 +13,15 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { OAuthGuard } from './guards/oauth.guard';
+import { CsrfOriginGuard } from './guards/csrf-origin.guard';
 import {
   EncryptionService,
   OauthIdentityService,
   OAuthProcessorService,
   OAuthService,
 } from './services';
-import { getAllStrategyClasses } from './config/strategy.registry';
+import { getStrategyClass } from './config/strategy.registry';
+import { getAllSupportedProviders } from './config/providers.config';
 
 @Module({
   imports: [
@@ -28,10 +30,7 @@ import { getAllStrategyClasses } from './config/strategy.registry';
       global: true,
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret:
-          config.get<string>('security.JWT_SECRET') ||
-          config.get<string>('JWT_SECRET') ||
-          'dev-only-secret-do-not-use-in-production!!',
+        secret: config.get<string>('security.JWT_SECRET'),
         signOptions: {
           expiresIn: config.get<string>(
             'security.JWT_ACCESS_EXPIRES',
@@ -52,20 +51,16 @@ import { getAllStrategyClasses } from './config/strategy.registry';
     UserRolesRepository,
     OAuthService,
     OAuthGuard,
+    CsrfOriginGuard,
     EncryptionService,
     OauthIdentityService,
     OAuthProcessorService,
-    ...getAllStrategyClasses(),
+    ...getAllSupportedProviders()
+      .map((provider) => getStrategyClass(provider))
+      .filter(
+        (strategy): strategy is NonNullable<typeof strategy> => !!strategy,
+      ),
   ],
-  exports: [
-    AuthService,
-    JwtStrategy,
-    JwtAuthGuard,
-    OAuthService,
-    OAuthGuard,
-    EncryptionService,
-    OauthIdentityService,
-    OAuthProcessorService,
-  ],
+  exports: [AuthService, JwtAuthGuard, OAuthService],
 })
 export class AuthModule {}

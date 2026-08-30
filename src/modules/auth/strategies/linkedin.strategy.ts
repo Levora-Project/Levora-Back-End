@@ -1,22 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, Profile } from 'passport-linkedin-oauth2';
-import { getProviderConfig } from '../config/providers.config';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class LinkedInStrategy extends PassportStrategy(Strategy, 'linkedin') {
-  constructor() {
-    const config = getProviderConfig('linkedin');
-    if (!config) {
-      throw new Error(
-        'LinkedIn OAuth configuration is missing. Please set LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, and LINKEDIN_CALLBACK_URL environment variables.',
-      );
+  constructor(configService: ConfigService) {
+    const clientID = configService.get<string>('oauth.LINKEDIN_CLIENT_ID');
+    const clientSecret = configService.get<string>(
+      'oauth.LINKEDIN_CLIENT_SECRET',
+    );
+    const callbackURL = configService.get<string>(
+      'oauth.LINKEDIN_CALLBACK_URL',
+    );
+
+    if (!clientID || !clientSecret || !callbackURL) {
+      super({
+        clientID: 'DISABLED',
+        clientSecret: 'DISABLED',
+        callbackURL: 'http://disabled',
+        scope: ['r_emailaddress', 'r_liteprofile'],
+      });
+      return;
     }
 
     super({
-      clientID: config.clientId,
-      clientSecret: config.clientSecret,
-      callbackURL: config.redirect,
+      clientID,
+      clientSecret,
+      callbackURL,
       scope: ['r_emailaddress', 'r_liteprofile'],
     });
   }

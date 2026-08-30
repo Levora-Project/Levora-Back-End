@@ -18,6 +18,10 @@ describe('OAuthProcessorService', () => {
   };
 
   const mockPrisma = {
+    $transaction: jest.fn().mockImplementation((cb) => {
+      // Pass mockPrisma as the transaction client
+      return cb(mockPrisma);
+    }),
     users: {
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -26,6 +30,10 @@ describe('OAuthProcessorService', () => {
     roles: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+    },
+    oauthIdentities: {
+      create: jest.fn(),
+      update: jest.fn(),
     },
   };
 
@@ -164,16 +172,24 @@ describe('OAuthProcessorService', () => {
 
       expect(mockEncryptionService.encrypt).toHaveBeenCalledWith('access-123');
       expect(mockEncryptionService.encrypt).toHaveBeenCalledWith('refresh-123');
-      expect(mockOauthIdentityService.update).toHaveBeenCalledWith(
-        'identity-1',
-        {
+      expect(mockPrisma.oauthIdentities.update).toHaveBeenCalledWith({
+        where: { id: 'identity-1' },
+        data: {
           accessTokenRef: 'enc_access-123',
           refreshTokenRef: 'enc_refresh-123',
         },
-      );
+      });
       expect(mockPrisma.users.update).toHaveBeenCalledWith({
         where: { id: 'user-uuid-1' },
         data: { lastLoginAt: expect.any(Date) },
+        include: {
+          userProfile: true,
+          userRoles: {
+            include: {
+              roles: true,
+            },
+          },
+        },
       });
       expect(result.user.id).toEqual('user-uuid-1');
       expect(result.accessToken).toEqual('signed-jwt-token');
@@ -232,16 +248,28 @@ describe('OAuthProcessorService', () => {
         accessToken: 'access-456',
       });
 
-      expect(mockOauthIdentityService.create).toHaveBeenCalledWith({
-        userId: 'user-uuid-2',
-        provider: 'linkedin',
-        providerUserId: 'li-456',
-        accessTokenRef: 'enc_access-456',
-        refreshTokenRef: null,
+      expect(mockPrisma.oauthIdentities.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-uuid-2',
+          provider: 'linkedin',
+          providerUserId: 'li-456',
+          accessTokenRef: 'enc_access-456',
+          refreshTokenRef: null,
+        },
       });
       expect(mockPrisma.users.update).toHaveBeenCalledWith({
         where: { id: 'user-uuid-2' },
-        data: { isEmailVerified: true, lastLoginAt: expect.any(Date) },
+        data: {
+          isEmailVerified: true,
+          lastLoginAt: expect.any(Date),
+          firstName: 'Jane',
+          lastName: 'Doe',
+          userProfile: {
+            update: {
+              fullName: 'Jane Doe',
+            },
+          },
+        },
         include: {
           userProfile: true,
           userRoles: {

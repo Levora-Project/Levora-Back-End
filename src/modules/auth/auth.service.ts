@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
 import { UsersService } from '@/modules/users/users.service';
+import { PrismaService } from '@/prisma';
 import {
   UsersRepository,
   UserRolesRepository,
@@ -25,6 +26,25 @@ export interface AuthTokens {
   refreshToken: string;
 }
 
+export interface UserWithRelations {
+  id: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  password?: string | null;
+  isEmailVerified: boolean;
+  isActive: boolean;
+  lastLoginAt: Date | null;
+  createdAt: Date;
+  userProfile: {
+    fullName: string | null;
+    completionPct: number;
+    isDraft: boolean;
+  } | null;
+  userRoles: Array<{ roles: { name: string } | null }>;
+  roles?: string[];
+}
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -35,6 +55,7 @@ export class AuthService {
     private readonly userRolesRepo: UserRolesRepository,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
   ) {}
 
   // ── Register ─────────────────────────────────
@@ -75,13 +96,6 @@ export class AuthService {
         isActive: true,
         lastLoginAt: true,
         createdAt: true,
-        userProfile: {
-          select: {
-            fullName: true,
-            completionPct: true,
-            isDraft: true,
-          },
-        },
       },
     });
 
@@ -107,25 +121,50 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    await this.usersService.updateLastLogin(user.id);
-    const role = await this.userRolesRepo.getCurrentRoleName(user.id);
+    const updatedUser = await this.prisma.users.update({
+      where: { email: dto.email },
+      data: { lastLoginAt: new Date() },
+      include: {
+        userProfile: {
+          select: {
+            fullName: true,
+            completionPct: true,
+            isDraft: true,
+          },
+        },
+        userRoles: {
+          include: {
+            roles: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    });
 
-    const tokens = await this.generateTokens(user.id, user.email, role);
+    const role = updatedUser.userRoles?.[0]?.roles?.name || 'user';
+    const tokens = await this.generateTokens(
+      updatedUser.id,
+      updatedUser.email,
+      role,
+    );
 
     const userOutput: UserResponseDto = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      isEmailVerified: user.isEmailVerified,
-      isActive: user.isActive,
-      lastLoginAt: new Date(),
-      createdAt: user.createdAt,
-      userProfile: user.userProfile,
+      id: updatedUser.id,
+      email: updatedUser.email,
+      firstName: updatedUser.firstName,
+      lastName: updatedUser.lastName,
+      isEmailVerified: updatedUser.isEmailVerified,
+      isActive: updatedUser.isActive,
+      lastLoginAt: updatedUser.lastLoginAt,
+      createdAt: updatedUser.createdAt,
+      userProfile: updatedUser.userProfile,
       roles: [role],
     };
 
-    this.logger.info(`User logged in: ${user.email}`);
+    this.logger.info(`User logged in: ${updatedUser.email}`);
 
     return {
       ...tokens,
@@ -187,26 +226,24 @@ export class AuthService {
   }
 
   // ── Helpers ──────────────────────────────────
-  private formatUserResponse(user: Record<string, unknown>): UserResponseDto {
+  private formatUserResponse(user: UserWithRelations): UserResponseDto {
     let roles: string[] = ['user'];
-    if (Array.isArray(user.userRoles)) {
-      roles = user.userRoles.map(
-        (ur) => (ur as { roles?: { name?: string } })?.roles?.name ?? 'user',
-      );
+    if (Array.isArray(user.userRoles) && user.userRoles.length > 0) {
+      roles = user.userRoles.map((ur) => ur.roles?.name ?? 'user');
     } else if (Array.isArray(user.roles)) {
-      roles = user.roles as string[];
+      roles = user.roles;
     }
 
     return {
-      id: user.id as string,
-      email: user.email as string,
-      firstName: (user.firstName as string) ?? null,
-      lastName: (user.lastName as string) ?? null,
-      isEmailVerified: (user.isEmailVerified as boolean) ?? false,
-      isActive: (user.isActive as boolean) ?? true,
-      lastLoginAt: (user.lastLoginAt as Date) ?? null,
-      createdAt: user.createdAt as Date,
-      userProfile: (user.userProfile as UserResponseDto['userProfile']) ?? null,
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      isEmailVerified: user.isEmailVerified,
+      isActive: user.isActive,
+      lastLoginAt: user.lastLoginAt,
+      createdAt: user.createdAt,
+      userProfile: user.userProfile,
       roles,
     };
   }

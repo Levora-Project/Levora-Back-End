@@ -6,6 +6,8 @@ import {
 } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 
+import { ConfigService } from '@nestjs/config';
+
 /**
  * PrismaService wraps PrismaClient with NestJS lifecycle hooks.
  *
@@ -24,10 +26,10 @@ export class PrismaService
 {
   private readonly logger = new Logger(PrismaService.name);
 
-  constructor() {
+  constructor(configService: ConfigService) {
     super({
       log:
-        process.env.NODE_ENV === 'development'
+        configService.get<string>('app.NODE_ENV') === 'development'
           ? ['query', 'info', 'warn', 'error']
           : ['error'],
     });

@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { OAuthService } from './services/oauth.service';
 import { OAuthProcessorService } from './services/oauth-processor.service';
 
 import { AuthGuard } from '@common/guards';
@@ -17,12 +16,6 @@ describe('AuthController', () => {
     login: jest.fn(),
     refreshToken: jest.fn(),
     getMe: jest.fn(),
-  };
-
-  const mockOAuthService = {
-    isProviderSupported: jest.fn(),
-    getSupportedProviders: jest.fn(),
-    getProviderConfig: jest.fn(),
   };
 
   const mockOAuthProcessorService = {
@@ -40,10 +33,6 @@ describe('AuthController', () => {
         {
           provide: AuthService,
           useValue: mockAuthService,
-        },
-        {
-          provide: OAuthService,
-          useValue: mockOAuthService,
         },
         {
           provide: OAuthProcessorService,
@@ -127,25 +116,6 @@ describe('AuthController', () => {
       expect(mockAuthService.login).toHaveBeenCalledWith(dto);
       expect(mockRes.cookie).toHaveBeenCalledTimes(2);
       expect(result).toEqual(expectedResult);
-    });
-  });
-
-  describe('oauth', () => {
-    it('should throw BadRequestException for unsupported provider', () => {
-      mockOAuthService.isProviderSupported.mockReturnValue(false);
-
-      expect(() => controller.oauth('unsupported')).toThrow(
-        BadRequestException,
-      );
-      expect(mockOAuthService.isProviderSupported).toHaveBeenCalledWith(
-        'unsupported',
-      );
-    });
-
-    it('should not throw for supported provider', () => {
-      mockOAuthService.isProviderSupported.mockReturnValue(true);
-
-      expect(() => controller.oauth('google')).not.toThrow();
     });
   });
 

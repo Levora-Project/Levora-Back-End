@@ -1,14 +1,23 @@
 import {
   BadRequestException,
+  UnauthorizedException,
   Injectable,
   ExecutionContext,
   CanActivate,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { isProviderSupported } from '../config/providers.config';
+import { ConfigService } from '@nestjs/config';
+import {
+  isProviderSupported,
+  isProviderConfigured,
+} from '../config/providers.config';
 
 @Injectable()
 export class OAuthGuard implements CanActivate {
+  private guardCache = new Map<string, CanActivate>();
+
+  constructor(private readonly configService: ConfigService) {}
+
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<{
       params?: { provider?: string };
@@ -23,12 +32,33 @@ export class OAuthGuard implements CanActivate {
       throw new BadRequestException(`Provider ${provider} is not supported`);
     }
 
-    const GuardClass = this.createGuardClass(provider);
-    const guard = new GuardClass();
+    if (!isProviderConfigured(provider, this.configService)) {
+      throw new BadRequestException(
+        `Provider ${provider} is not configured. Please check environment variables.`,
+      );
+    }
+
+    let guard = this.guardCache.get(provider);
+    if (!guard) {
+      const GuardClass = this.createGuardClass(provider);
+      guard = new GuardClass();
+      this.guardCache.set(provider, guard);
+    }
+
     return guard.canActivate(context) as Promise<boolean>;
   }
 
   private createGuardClass(strategyName: string): new () => CanActivate {
-    return class extends AuthGuard(strategyName) {};
+    return class extends AuthGuard(strategyName) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      handleRequest<TUser = any>(err: any, user: any): TUser {
+        if (err || !user) {
+          throw new UnauthorizedException(
+            err?.message || 'Authentication failed',
+          );
+        }
+        return user;
+      }
+    };
   }
 }

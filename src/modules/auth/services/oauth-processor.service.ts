@@ -100,23 +100,36 @@ export class OAuthProcessorService {
         throw new UnauthorizedException('Account is deactivated');
       }
 
-      // Update tokens on existing identity
-      await this.oauthIdentityService.update(existingIdentity.id, {
-        accessTokenRef: encryptedAccessToken,
-        refreshTokenRef: encryptedRefreshToken,
-      });
+      const updatedUser = await this.prisma.$transaction(async (tx) => {
+        // Update tokens on existing identity
+        await tx.oauthIdentities.update({
+          where: { id: existingIdentity.id },
+          data: {
+            accessTokenRef: encryptedAccessToken,
+            refreshTokenRef: encryptedRefreshToken,
+          },
+        });
 
-      // Update last login
-      await this.prisma.users.update({
-        where: { id: existingIdentity.user.id },
-        data: { lastLoginAt: new Date() },
+        // Update last login
+        return tx.users.update({
+          where: { id: existingIdentity.user.id },
+          data: { lastLoginAt: new Date() },
+          include: {
+            userProfile: true,
+            userRoles: {
+              include: {
+                roles: true,
+              },
+            },
+          },
+        });
       });
 
       this.logger.info(
-        `OAuth login existing identity: ${existingIdentity.user.email} (${provider})`,
+        `OAuth login existing identity: ${updatedUser.email} (${provider})`,
       );
 
-      return this.generateAuthResponse(existingIdentity.user);
+      return this.generateAuthResponse(updatedUser);
     }
 
     // 4. Check for existing user by email
@@ -140,30 +153,59 @@ export class OAuthProcessorService {
         throw new UnauthorizedException('Account is deactivated');
       }
 
-      // Link OAuth identity to existing user (FR-002-08)
-      await this.oauthIdentityService.create({
-        userId: existingUser.id,
-        provider,
-        providerUserId,
-        accessTokenRef: encryptedAccessToken,
-        refreshTokenRef: encryptedRefreshToken,
-      });
+      const updatedUser = await this.prisma.$transaction(async (tx) => {
+        // Link OAuth identity to existing user (FR-002-08)
+        await tx.oauthIdentities.create({
+          data: {
+            userId: existingUser.id,
+            provider,
+            providerUserId,
+            accessTokenRef: encryptedAccessToken,
+            refreshTokenRef: encryptedRefreshToken,
+          },
+        });
 
-      // Mark email verified if not already, and update last login
-      const updatedUser = await this.prisma.users.update({
-        where: { id: existingUser.id },
-        data: {
+        const updateData: Record<string, unknown> = {
           isEmailVerified: true,
           lastLoginAt: new Date(),
-        },
-        include: {
-          userProfile: true,
-          userRoles: {
-            include: {
-              roles: true,
+        };
+
+        if (firstName) {
+          updateData.firstName = firstName;
+        }
+        if (lastName) {
+          updateData.lastName = lastName;
+        }
+
+        const profileUpdateData: Record<string, unknown> = {};
+        if (firstName || lastName) {
+          profileUpdateData.fullName =
+            [firstName, lastName].filter(Boolean).join(' ') ||
+            normalizedEmail.split('@')[0];
+        }
+        if (picture) {
+          profileUpdateData.profilePhotoUrl = picture;
+        }
+
+        if (Object.keys(profileUpdateData).length > 0) {
+          updateData.userProfile = {
+            update: profileUpdateData,
+          };
+        }
+
+        // Mark email verified if not already, update last login, and sync fields
+        return tx.users.update({
+          where: { id: existingUser.id },
+          data: updateData,
+          include: {
+            userProfile: true,
+            userRoles: {
+              include: {
+                roles: true,
+              },
             },
           },
-        },
+        });
       });
 
       this.logger.info(
@@ -178,50 +220,52 @@ export class OAuthProcessorService {
       [firstName, lastName].filter(Boolean).join(' ') ||
       normalizedEmail.split('@')[0];
 
-    // Find default role 'user'
-    const defaultRole = await this.prisma.roles.findUnique({
-      where: { name: 'user' },
-    });
-    const roleId = defaultRole ? defaultRole.id : 1;
+    const newUser = await this.prisma.$transaction(async (tx) => {
+      // Find default role 'user'
+      const defaultRole = await tx.roles.findUnique({
+        where: { name: 'user' },
+      });
+      const roleId = defaultRole ? defaultRole.id : 1;
 
-    const newUser = await this.prisma.users.create({
-      data: {
-        email: normalizedEmail,
-        firstName: firstName || null,
-        lastName: lastName || null,
-        isEmailVerified: true,
-        isActive: true,
-        lastLoginAt: new Date(),
-        userProfile: {
-          create: {
-            fullName,
-            profilePhotoUrl: picture || null,
-            isDraft: true,
-            completionPct: 0,
+      return tx.users.create({
+        data: {
+          email: normalizedEmail,
+          firstName: firstName || null,
+          lastName: lastName || null,
+          isEmailVerified: true,
+          isActive: true,
+          lastLoginAt: new Date(),
+          userProfile: {
+            create: {
+              fullName,
+              profilePhotoUrl: picture || null,
+              isDraft: true,
+              completionPct: 0,
+            },
+          },
+          userRoles: {
+            create: {
+              roleId,
+            },
+          },
+          oauthIdentities: {
+            create: {
+              provider,
+              providerUserId,
+              accessTokenRef: encryptedAccessToken,
+              refreshTokenRef: encryptedRefreshToken,
+            },
           },
         },
-        userRoles: {
-          create: {
-            roleId,
+        include: {
+          userProfile: true,
+          userRoles: {
+            include: {
+              roles: true,
+            },
           },
         },
-        oauthIdentities: {
-          create: {
-            provider,
-            providerUserId,
-            accessTokenRef: encryptedAccessToken,
-            refreshTokenRef: encryptedRefreshToken,
-          },
-        },
-      },
-      include: {
-        userProfile: true,
-        userRoles: {
-          include: {
-            roles: true,
-          },
-        },
-      },
+      });
     });
 
     this.logger.info(

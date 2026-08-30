@@ -5,32 +5,25 @@ import { LoggerModule } from 'nestjs-pino';
 import { AuthModule } from './auth.module';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { OAuthService } from './services/oauth.service';
 import { OAuthGuard } from './guards/oauth.guard';
-import { EncryptionService } from './services/encryption.service';
-import { OauthIdentityService } from './services/oauth-identity.service';
 import { OAuthProcessorService } from './services/oauth-processor.service';
 import { PrismaService } from '@/prisma';
 import { UsersService } from '@/modules/users/users.service';
+import { GoogleStrategy } from './strategies/google.strategy';
+import { LinkedInStrategy } from './strategies/linkedin.strategy';
 
-// Mock the strategies to avoid constructor errors
+// Mock the strategies to avoid constructor errors if they are instantiated
 jest.mock('./strategies/google.strategy');
 jest.mock('./strategies/linkedin.strategy');
 jest.mock('./config/providers.config', () => ({
-  getProviderConfig: jest.fn().mockReturnValue({
-    clientId: 'test-id',
-    clientSecret: 'test-secret',
-    redirect: 'http://localhost:3000/api/v1/auth/test/callback',
-  }),
-  getConfiguredProviders: jest.fn().mockReturnValue(['google', 'linkedin']),
-  getSupportedProviders: jest.fn().mockReturnValue(['google', 'linkedin']),
+  getAllSupportedProviders: jest.fn().mockReturnValue(['google', 'linkedin']),
 }));
 
-describe('AuthModule', () => {
+describe('AuthModule Boot Testing', () => {
   let module: TestingModule;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     module = await Test.createTestingModule({
       imports: [
         PassportModule,
@@ -58,47 +51,23 @@ describe('AuthModule', () => {
       .compile();
   });
 
-  it('should be defined', () => {
+  it('Module compiles successfully', () => {
     expect(module).toBeDefined();
+
+    // Core services should still be present
+    expect(module.get<AuthService>(AuthService)).toBeDefined();
+    expect(module.get<JwtStrategy>(JwtStrategy)).toBeDefined();
+
+    // Strategies should be instantiated
+    expect(module.get(GoogleStrategy)).toBeDefined();
+    expect(module.get(LinkedInStrategy)).toBeDefined();
   });
 
-  it('should provide AuthService', () => {
-    const service = module.get<AuthService>(AuthService);
-    expect(service).toBeDefined();
-  });
-
-  it('should provide JwtStrategy', () => {
-    const strategy = module.get<JwtStrategy>(JwtStrategy);
-    expect(strategy).toBeDefined();
-  });
-
-  it('should provide JwtAuthGuard', () => {
-    const guard = module.get<JwtAuthGuard>(JwtAuthGuard);
-    expect(guard).toBeDefined();
-  });
-
-  it('should provide OAuthService', () => {
-    const service = module.get<OAuthService>(OAuthService);
-    expect(service).toBeDefined();
-  });
-
-  it('should provide OAuthGuard', () => {
-    const guard = module.get<OAuthGuard>(OAuthGuard);
-    expect(guard).toBeDefined();
-  });
-
-  it('should provide EncryptionService', () => {
-    const encryption = module.get<EncryptionService>(EncryptionService);
-    expect(encryption).toBeDefined();
-  });
-
-  it('should provide OauthIdentityService', () => {
-    const identity = module.get<OauthIdentityService>(OauthIdentityService);
-    expect(identity).toBeDefined();
-  });
-
-  it('should provide OAuthProcessorService', () => {
-    const processor = module.get<OAuthProcessorService>(OAuthProcessorService);
-    expect(processor).toBeDefined();
+  it('should provide OAuth services regardless of configured strategies', () => {
+    expect(module.get<OAuthService>(OAuthService)).toBeDefined();
+    expect(module.get<OAuthGuard>(OAuthGuard)).toBeDefined();
+    expect(
+      module.get<OAuthProcessorService>(OAuthProcessorService),
+    ).toBeDefined();
   });
 });

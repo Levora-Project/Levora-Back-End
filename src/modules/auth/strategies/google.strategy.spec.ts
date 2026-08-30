@@ -1,10 +1,5 @@
 import { GoogleStrategy } from './google.strategy';
-import * as providersConfig from '../config/providers.config';
-
-// Mock the providers config module
-jest.mock('../config/providers.config', () => ({
-  getProviderConfig: jest.fn(),
-}));
+import { ConfigService } from '@nestjs/config';
 
 // Mock PassportStrategy
 jest.mock('@nestjs/passport', () => {
@@ -19,39 +14,40 @@ jest.mock('@nestjs/passport', () => {
 });
 
 describe('GoogleStrategy', () => {
-  const originalEnv = process.env;
+  let mockConfigService: Partial<ConfigService>;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    process.env = { ...originalEnv };
-  });
-
-  afterAll(() => {
-    process.env = originalEnv;
+    mockConfigService = {
+      get: jest.fn(),
+    };
   });
 
   describe('constructor', () => {
-    it('should throw error when config is missing', () => {
-      (providersConfig.getProviderConfig as jest.Mock).mockReturnValue(
-        undefined,
-      );
+    it('should initialize with DISABLED when config is missing', () => {
+      (mockConfigService.get as jest.Mock).mockReturnValue(undefined);
 
-      expect(() => new GoogleStrategy()).toThrow(
-        'Google OAuth configuration is missing',
-      );
+      const strategy = new GoogleStrategy(mockConfigService as ConfigService);
+      expect(strategy).toBeDefined();
     });
 
     it('should initialize successfully with valid config', () => {
-      const mockConfig = {
-        clientId: 'test-google-id',
-        clientSecret: 'test-google-secret',
-        redirect: 'http://localhost:3000/api/v1/auth/google/callback',
-      };
-      (providersConfig.getProviderConfig as jest.Mock).mockReturnValue(
-        mockConfig,
-      );
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'GOOGLE_CLIENT_ID') {
+          return 'test-google-id';
+        }
+        if (key === 'GOOGLE_CLIENT_SECRET') {
+          return 'test-google-secret';
+        }
+        if (key === 'GOOGLE_CALLBACK_URL') {
+          return 'http://localhost:3000/api/v1/auth/google/callback';
+        }
+        return undefined;
+      });
 
-      expect(() => new GoogleStrategy()).not.toThrow();
+      expect(
+        () => new GoogleStrategy(mockConfigService as ConfigService),
+      ).not.toThrow();
     });
   });
 
@@ -60,16 +56,20 @@ describe('GoogleStrategy', () => {
     let mockDone: jest.Mock;
 
     beforeEach(() => {
-      const mockConfig = {
-        clientId: 'test-google-id',
-        clientSecret: 'test-google-secret',
-        redirect: 'http://localhost:3000/api/v1/auth/google/callback',
-      };
-      (providersConfig.getProviderConfig as jest.Mock).mockReturnValue(
-        mockConfig,
-      );
+      (mockConfigService.get as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'GOOGLE_CLIENT_ID') {
+          return 'test-google-id';
+        }
+        if (key === 'GOOGLE_CLIENT_SECRET') {
+          return 'test-google-secret';
+        }
+        if (key === 'GOOGLE_CALLBACK_URL') {
+          return 'http://localhost:3000/api/v1/auth/google/callback';
+        }
+        return undefined;
+      });
 
-      strategy = new GoogleStrategy();
+      strategy = new GoogleStrategy(mockConfigService as ConfigService);
       mockDone = jest.fn();
     });
 

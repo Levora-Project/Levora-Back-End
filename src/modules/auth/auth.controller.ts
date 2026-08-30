@@ -9,7 +9,6 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
-  BadRequestException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -34,8 +33,7 @@ import {
 import { Public, CurrentUser } from '@common/decorators';
 import { AuthGuard } from '@common/guards';
 import { ErrorResponse } from '@common/dto';
-import { OAuthGuard } from './guards/oauth.guard';
-import { OAuthService } from './services/oauth.service';
+import { OAuthGuard, CsrfOriginGuard } from './guards';
 import { OAuthProcessorService } from './services/oauth-processor.service';
 
 const ACCESS_COOKIE = 'accessToken';
@@ -59,7 +57,6 @@ interface PassportOAuthUser {
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
-    private readonly oauthService: OAuthService,
     private readonly oauthProcessorService: OAuthProcessorService,
     private readonly config: ConfigService,
   ) {}
@@ -149,6 +146,7 @@ export class AuthController {
 
   @Public()
   @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @UseGuards(CsrfOriginGuard)
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token' })
@@ -230,13 +228,7 @@ export class AuthController {
     description: 'Unsupported provider',
     type: ErrorResponse,
   })
-  oauth(@Param('provider') provider: string): void {
-    const providerLower = provider.toLowerCase();
-
-    if (!this.oauthService.isProviderSupported(providerLower)) {
-      throw new BadRequestException(`Provider ${provider} is not supported`);
-    }
-
+  oauth(@Param('provider') _provider: string): void {
     // The OAuth guard handles the redirect to the provider
   }
 

@@ -8,10 +8,7 @@ export class EncryptionService {
   private readonly key: Buffer;
 
   constructor(private readonly config: ConfigService) {
-    const rawKey =
-      this.config.get<string>('oauth.OAUTH_ENCRYPTION_KEY') ||
-      this.config.get<string>('OAUTH_ENCRYPTION_KEY') ||
-      process.env.OAUTH_ENCRYPTION_KEY;
+    const rawKey = this.config.get<string>('oauth.OAUTH_ENCRYPTION_KEY');
 
     if (!rawKey || rawKey.length !== 64 || !/^[0-9a-fA-F]{64}$/.test(rawKey)) {
       throw new Error(

@@ -1,22 +1,31 @@
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy, VerifyCallback } from 'passport-google-oauth20';
-import { getProviderConfig } from '../config/providers.config';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
-  constructor() {
-    const config = getProviderConfig('google');
-    if (!config) {
-      throw new Error(
-        'Google OAuth configuration is missing. Please set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_CALLBACK_URL environment variables.',
-      );
+  constructor(configService: ConfigService) {
+    const clientID = configService.get<string>('oauth.GOOGLE_CLIENT_ID');
+    const clientSecret = configService.get<string>(
+      'oauth.GOOGLE_CLIENT_SECRET',
+    );
+    const callbackURL = configService.get<string>('oauth.GOOGLE_CALLBACK_URL');
+
+    if (!clientID || !clientSecret || !callbackURL) {
+      super({
+        clientID: 'DISABLED',
+        clientSecret: 'DISABLED',
+        callbackURL: 'http://disabled',
+        scope: ['email', 'profile'],
+      });
+      return;
     }
 
     super({
-      clientID: config.clientId,
-      clientSecret: config.clientSecret,
-      callbackURL: config.redirect,
+      clientID,
+      clientSecret,
+      callbackURL,
       scope: ['email', 'profile'],
     });
   }

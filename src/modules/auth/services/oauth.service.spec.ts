@@ -1,26 +1,34 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { OAuthService } from './oauth.service';
+import { ConfigService } from '@nestjs/config';
 import * as providersConfig from '../config/providers.config';
 
 // Mock the providers config module
 jest.mock('../config/providers.config', () => ({
-  getSupportedProviders: jest.fn(),
   getAllSupportedProviders: jest.fn(),
-  getConfiguredProviders: jest.fn(),
   isProviderSupported: jest.fn(),
   isProviderConfigured: jest.fn(),
-  getProviderConfig: jest.fn(),
 }));
 
 describe('OAuthService', () => {
   let service: OAuthService;
+  let configService: ConfigService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [OAuthService],
+      providers: [
+        OAuthService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<OAuthService>(OAuthService);
+    configService = module.get<ConfigService>(ConfigService);
     jest.clearAllMocks();
   });
 
@@ -44,13 +52,16 @@ describe('OAuthService', () => {
   describe('getConfiguredProviders', () => {
     it('should return configured providers from env', () => {
       const mockProviders = ['google', 'facebook'];
-      (providersConfig.getConfiguredProviders as jest.Mock).mockReturnValue(
+      (providersConfig.getAllSupportedProviders as jest.Mock).mockReturnValue(
         mockProviders,
+      );
+      (providersConfig.isProviderConfigured as jest.Mock).mockImplementation(
+        (provider: string) => provider === 'google',
       );
 
       const result = service.getConfiguredProviders();
-      expect(result).toEqual(mockProviders);
-      expect(providersConfig.getConfiguredProviders).toHaveBeenCalled();
+      expect(result).toEqual(['google']);
+      expect(providersConfig.isProviderConfigured).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -84,6 +95,7 @@ describe('OAuthService', () => {
       expect(result).toBe(true);
       expect(providersConfig.isProviderConfigured).toHaveBeenCalledWith(
         'google',
+        configService,
       );
     });
 
@@ -96,36 +108,42 @@ describe('OAuthService', () => {
       expect(result).toBe(false);
       expect(providersConfig.isProviderConfigured).toHaveBeenCalledWith(
         'google',
+        configService,
       );
     });
   });
 
   describe('getProviderConfig', () => {
     it('should return provider config', () => {
-      const mockConfig = {
+      (providersConfig.isProviderConfigured as jest.Mock).mockReturnValue(true);
+      (configService.get as jest.Mock).mockImplementation((key: string) => {
+        if (key === 'oauth.GOOGLE_CLIENT_ID') {
+          return 'test-id';
+        }
+        if (key === 'oauth.GOOGLE_CLIENT_SECRET') {
+          return 'test-secret';
+        }
+        if (key === 'oauth.GOOGLE_CALLBACK_URL') {
+          return 'http://localhost:3000/api/v1/auth/google/callback';
+        }
+        return undefined;
+      });
+
+      const result = service.getProviderConfig('google');
+      expect(result).toEqual({
         clientId: 'test-id',
         clientSecret: 'test-secret',
         redirect: 'http://localhost:3000/api/v1/auth/google/callback',
-      };
-      (providersConfig.getProviderConfig as jest.Mock).mockReturnValue(
-        mockConfig,
-      );
-
-      const result = service.getProviderConfig('google');
-      expect(result).toEqual(mockConfig);
-      expect(providersConfig.getProviderConfig).toHaveBeenCalledWith('google');
+      });
     });
 
     it('should return undefined for invalid provider', () => {
-      (providersConfig.getProviderConfig as jest.Mock).mockReturnValue(
-        undefined,
+      (providersConfig.isProviderConfigured as jest.Mock).mockReturnValue(
+        false,
       );
 
       const result = service.getProviderConfig('linkedin');
       expect(result).toBeUndefined();
-      expect(providersConfig.getProviderConfig).toHaveBeenCalledWith(
-        'linkedin',
-      );
     });
   });
 });

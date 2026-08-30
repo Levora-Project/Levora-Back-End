@@ -1,10 +1,12 @@
 import { ExecutionContext, BadRequestException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { OAuthGuard } from './oauth.guard';
 import * as providersConfig from '../config/providers.config';
 
 // Mock the providers config module
 jest.mock('../config/providers.config', () => ({
   isProviderSupported: jest.fn(),
+  isProviderConfigured: jest.fn(),
 }));
 
 // Mock AuthGuard
@@ -24,8 +26,13 @@ describe('OAuthGuard', () => {
   let guard: OAuthGuard;
   let mockExecutionContext: ExecutionContext;
 
+  let mockConfigService: any;
+
   beforeEach(() => {
-    guard = new OAuthGuard();
+    mockConfigService = {
+      get: jest.fn(),
+    };
+    guard = new OAuthGuard(mockConfigService as ConfigService);
     jest.clearAllMocks();
 
     // Create mock execution context
@@ -69,7 +76,27 @@ describe('OAuthGuard', () => {
       );
     });
 
-    it('should return true for supported provider', async () => {
+    it('should throw BadRequestException for unconfigured provider', async () => {
+      const request = mockExecutionContext.switchToHttp().getRequest<{
+        params?: { provider?: string };
+      }>();
+      if (request.params) {
+        request.params.provider = 'unconfigured-provider';
+      }
+      (providersConfig.isProviderSupported as jest.Mock).mockReturnValue(true);
+      (providersConfig.isProviderConfigured as jest.Mock).mockReturnValue(
+        false,
+      );
+
+      await expect(guard.canActivate(mockExecutionContext)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(guard.canActivate(mockExecutionContext)).rejects.toThrow(
+        'Provider unconfigured-provider is not configured. Please check environment variables.',
+      );
+    });
+
+    it('should return true for supported and configured provider', async () => {
       const request = mockExecutionContext.switchToHttp().getRequest<{
         params?: { provider?: string };
       }>();
@@ -77,11 +104,16 @@ describe('OAuthGuard', () => {
         request.params.provider = 'google';
       }
       (providersConfig.isProviderSupported as jest.Mock).mockReturnValue(true);
+      (providersConfig.isProviderConfigured as jest.Mock).mockReturnValue(true);
 
       const result = await guard.canActivate(mockExecutionContext);
       expect(result).toBe(true);
       expect(providersConfig.isProviderSupported).toHaveBeenCalledWith(
         'google',
+      );
+      expect(providersConfig.isProviderConfigured).toHaveBeenCalledWith(
+        'google',
+        mockConfigService,
       );
     });
 
@@ -93,6 +125,7 @@ describe('OAuthGuard', () => {
         request.params.provider = 'GOOGLE';
       }
       (providersConfig.isProviderSupported as jest.Mock).mockReturnValue(true);
+      (providersConfig.isProviderConfigured as jest.Mock).mockReturnValue(true);
 
       const result = await guard.canActivate(mockExecutionContext);
       expect(result).toBe(true);

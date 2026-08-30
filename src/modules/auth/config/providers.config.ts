@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { STRATEGY_REGISTRY, getStrategyClass } from './strategy.registry';
 
 export interface ProviderConfig {
@@ -6,62 +7,11 @@ export interface ProviderConfig {
   redirect: string;
 }
 
-export interface ProvidersConfig {
-  [provider: string]: ProviderConfig;
-}
-
-export function getProvidersConfig(): ProvidersConfig {
-  const config: ProvidersConfig = {};
-
-  // Google configuration
-  if (
-    process.env.GOOGLE_CLIENT_ID &&
-    process.env.GOOGLE_CLIENT_SECRET &&
-    process.env.GOOGLE_CALLBACK_URL
-  ) {
-    config.google = {
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      redirect: process.env.GOOGLE_CALLBACK_URL,
-    };
-  }
-
-  // LinkedIn configuration
-  if (
-    process.env.LINKEDIN_CLIENT_ID &&
-    process.env.LINKEDIN_CLIENT_SECRET &&
-    process.env.LINKEDIN_CALLBACK_URL
-  ) {
-    config.linkedin = {
-      clientId: process.env.LINKEDIN_CLIENT_ID,
-      clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
-      redirect: process.env.LINKEDIN_CALLBACK_URL,
-    };
-  }
-
-  return config;
-}
-
-/**
- * Get list of all providers that are currently configured via environment variables
- */
-export function getConfiguredProviders(): string[] {
-  const config = getProvidersConfig();
-  return Object.keys(config);
-}
-
 /**
  * Get list of all providers supported by this library (have strategy implementations)
  */
 export function getSupportedProviders(): string[] {
   return getAllSupportedProviders();
-}
-
-export function getProviderConfig(
-  provider: string,
-): ProviderConfig | undefined {
-  const config = getProvidersConfig();
-  return config[provider.toLowerCase()];
 }
 
 /**
@@ -74,9 +24,25 @@ export function isProviderSupported(provider: string): boolean {
 /**
  * Check if a provider is configured via environment variables
  */
-export function isProviderConfigured(provider: string): boolean {
-  const config = getProvidersConfig();
-  return provider.toLowerCase() in config;
+export function isProviderConfigured(
+  provider: string,
+  configService: ConfigService,
+): boolean {
+  if (provider.toLowerCase() === 'google') {
+    return !!(
+      configService.get<string>('oauth.GOOGLE_CLIENT_ID') &&
+      configService.get<string>('oauth.GOOGLE_CLIENT_SECRET') &&
+      configService.get<string>('oauth.GOOGLE_CALLBACK_URL')
+    );
+  }
+  if (provider.toLowerCase() === 'linkedin') {
+    return !!(
+      configService.get<string>('oauth.LINKEDIN_CLIENT_ID') &&
+      configService.get<string>('oauth.LINKEDIN_CLIENT_SECRET') &&
+      configService.get<string>('oauth.LINKEDIN_CALLBACK_URL')
+    );
+  }
+  return false;
 }
 
 /**

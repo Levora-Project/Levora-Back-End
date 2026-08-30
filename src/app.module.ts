@@ -40,7 +40,7 @@ import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
         uploadConfig,
         oauthConfig,
       ],
-      envFilePath: ['.env'],
+      envFilePath: ['.env.local', '.env'],
     }),
 
     // ── Structured Logging (Pino) ────────────────
