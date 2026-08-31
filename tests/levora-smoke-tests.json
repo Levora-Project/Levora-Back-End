@@ -998,6 +998,7 @@
     },
     {
       "name": "4. OAuth Integration",
+      "disabled": true,
       "description": "Smoke tests for OAuth 2.0 provider initiation endpoints (Google and LinkedIn).\n\n### Why Only Initiation Endpoints?\nOAuth callback endpoints (`/auth/:provider/callback`) require a real one-time authorization `code` issued by the provider after the user completes the browser consent flow. This code:\n- Cannot be generated or predicted programmatically\n- Expires within seconds and can only be used once\n- Requires an active browser session with the OAuth provider\n\nTherefore, callback testing is excluded from this smoke suite. Complete OAuth callback testing is covered in `test/oauth.e2e-spec.ts` using mocked guards and a real database.\n\n### Newman Cookie Isolation\nAll OAuth initiation tests clear the cookie jar before execution to prevent any auth cookies from a previous login step from leaking into these requests.",
       "item": [
         {
