@@ -83,13 +83,11 @@ export class ProfileService {
   }
 
   isCoreFieldsComplete(profile: ProfileWithRelations): boolean {
-    return (
-      profile.educationLevel !== null &&
-      profile.educationLevel !== undefined &&
+    return !!(
+      profile.educationLevel?.trim() &&
       Array.isArray(profile.fieldOfStudy) &&
       profile.fieldOfStudy.length > 0 &&
-      profile.nationality !== null &&
-      profile.nationality !== undefined
+      profile.nationality?.trim()
     );
   }
 
@@ -146,7 +144,8 @@ export class ProfileService {
     // Step 1: Education
     if (
       profile.educationLevel &&
-      profile.fieldOfStudy?.length > 0 &&
+      profile.fieldOfStudy &&
+      profile.fieldOfStudy.length > 0 &&
       profile.nationality
     ) {
       step = 1;
@@ -168,14 +167,20 @@ export class ProfileService {
     // Step 3: Skills & Languages
     if (
       step === 2 &&
-      profile.user?.userSkills?.length > 0 &&
-      profile.user?.userLanguages?.length > 0
+      profile.user?.userSkills &&
+      profile.user.userSkills.length > 0 &&
+      profile.user?.userLanguages &&
+      profile.user.userLanguages.length > 0
     ) {
       step = 3;
     }
 
     // Step 4: Documents
-    if (step === 3 && profile.user?.documents?.length > 0) {
+    if (
+      step === 3 &&
+      profile.user?.documents &&
+      profile.user.documents.length > 0
+    ) {
       step = 4;
     }
 
@@ -190,7 +195,7 @@ export class ProfileService {
       (us: {
         skillId: string;
         skill: { name: string };
-        proficiency: string;
+        proficiency: number | null;
       }) => ({
         skillId: us.skillId,
         name: us.skill.name,
@@ -251,6 +256,18 @@ export class ProfileService {
 
     if (!currentProfile) {
       throw new NotFoundException('Profile not found');
+    }
+
+    if (data.fieldOfStudy !== undefined && data.fieldOfStudy.length === 0) {
+      throw new BadRequestException(
+        'fieldOfStudy must contain at least one value',
+      );
+    }
+
+    if (data.gpaScale && data.gpaValue === undefined) {
+      throw new BadRequestException(
+        'gpaValue is required when updating GPA scale',
+      );
     }
 
     if (currentProfile.educationLevel && data.educationLevel === null) {
@@ -401,8 +418,8 @@ export class ProfileService {
         },
       });
 
-      const pct = this.calculateCompletionPct(updatedProfileWithRelations);
-      const isCore = this.isCoreFieldsComplete(updatedProfileWithRelations);
+      const pct = this.calculateCompletionPct(updatedProfileWithRelations!);
+      const isCore = this.isCoreFieldsComplete(updatedProfileWithRelations!);
 
       await prisma.userProfiles.update({
         where: { userId },

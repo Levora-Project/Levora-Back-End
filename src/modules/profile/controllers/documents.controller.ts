@@ -20,6 +20,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { DocumentsService } from '../services/documents.service';
+import { UploadDocumentDto } from '../dto/upload-document.dto';
 
 interface RequestWithUser {
   user: { id: string };
@@ -53,7 +54,7 @@ export class DocumentsController {
   async uploadDocument(
     @Req() req: RequestWithUser,
     @UploadedFile() file: Express.Multer.File,
-    @Body('documentType') docType: string,
+    @Body() body: UploadDocumentDto,
   ) {
     if (!file) {
       throw new BadRequestException('File is required');
@@ -88,7 +89,7 @@ export class DocumentsController {
     const doc = await this.documentsService.uploadDocument(
       req.user.id,
       file,
-      docType || 'other',
+      body.documentType || 'other',
     );
     return {
       statusCode: 201,
