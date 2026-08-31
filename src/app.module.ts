@@ -25,6 +25,7 @@ import { UsersModule } from '@modules/users';
 import { AuthModule } from '@modules/auth';
 import { AuthGuard, RolesGuard, IdempotencyGuard } from '@common/guards';
 import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
+import { ProfileModule } from './modules/profile/profile.module';
 
 @Module({
   imports: [
@@ -244,6 +245,7 @@ import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
     HealthModule,
     AuthModule,
     UsersModule,
+    ProfileModule,
   ],
   providers: [
     // Global throttler guard

@@ -1,0 +1,68 @@
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as fs from 'fs';
+import * as path from 'path';
+import { StorageService } from '../interfaces/storage.interface';
+import { v4 as uuidv4 } from 'uuid';
+
+@Injectable()
+export class LocalStorageService implements StorageService {
+  private readonly uploadPath: string;
+
+  constructor(private configService: ConfigService) {
+    this.uploadPath =
+      this.configService.get<string>('storage.local.uploadPath') || './uploads';
+
+    if (!fs.existsSync(this.uploadPath)) {
+      fs.mkdirSync(this.uploadPath, { recursive: true });
+    }
+  }
+
+  async upload(
+    file: Buffer,
+    filename: string,
+    _mimeType: string,
+  ): Promise<{ key: string; url?: string }> {
+    try {
+      const key = `${uuidv4()}-${filename}`;
+      const filePath = path.join(this.uploadPath, key);
+      await fs.promises.writeFile(filePath, file);
+      return { key };
+    } catch {
+      throw new InternalServerErrorException(
+        'Failed to upload file to local storage',
+      );
+    }
+  }
+
+  async download(key: string): Promise<Buffer> {
+    try {
+      const filePath = path.join(this.uploadPath, key);
+      return await fs.promises.readFile(filePath);
+    } catch {
+      throw new InternalServerErrorException(
+        'Failed to read file from local storage',
+      );
+    }
+  }
+
+  async delete(key: string): Promise<void> {
+    try {
+      const filePath = path.join(this.uploadPath, key);
+      if (fs.existsSync(filePath)) {
+        await fs.promises.unlink(filePath);
+      }
+    } catch {
+      throw new InternalServerErrorException(
+        'Failed to delete file from local storage',
+      );
+    }
+  }
+
+  getSignedUrl(key: string, expiresIn: number): Promise<string> {
+    const token = Buffer.from(
+      JSON.stringify({ key, exp: Date.now() + expiresIn * 1000 }),
+    ).toString('base64');
+    return Promise.resolve(`/local-storage/${key}?token=${token}`);
+  }
+}

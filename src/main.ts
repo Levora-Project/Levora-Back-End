@@ -135,6 +135,7 @@ async function bootstrap() {
     '/api-json',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (_req: any, res: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
       res.json(document);
     },
   );

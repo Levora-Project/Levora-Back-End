@@ -148,10 +148,20 @@ model UserEducations {
   @@map("user_educations")
 }
 
+model FieldOfStudy {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @unique @db.Text
+  category  String?  @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+
+  @@map("fields_of_study")
+}
+
 model SkillsMaster {
   id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name     String   @unique @db.Citext
   category String   @db.Text
+  isActive Boolean  @default(true) @map("is_active")
 
   userSkills UserSkills[]
 
