@@ -1,4 +1,3 @@
-
 ```markdown
 # Implementation Plan: Project Initialization & JWT Authentication System
 
@@ -15,25 +14,25 @@
 
 ### 1.1 Technology Stack
 
-| Layer | Technology | Version |
-|-------|------------|---------|
-| Backend Framework | NestJS | ^10.0.0 |
-| Database ORM | Prisma | ^5.0.0 |
-| Database | PostgreSQL | 15+ |
-| Language | TypeScript | ^5.0.0 |
-| Package Manager | pnpm | ^8.0.0 |
-| Testing | Jest | ^29.0.0 |
-| API Documentation | Swagger/OpenAPI | ^7.0.0 |
+| Layer             | Technology      | Version |
+| ----------------- | --------------- | ------- |
+| Backend Framework | NestJS          | ^10.0.0 |
+| Database ORM      | Prisma          | ^5.0.0  |
+| Database          | PostgreSQL      | 15+     |
+| Language          | TypeScript      | ^5.0.0  |
+| Package Manager   | pnpm            | ^8.0.0  |
+| Testing           | Jest            | ^29.0.0 |
+| API Documentation | Swagger/OpenAPI | ^7.0.0  |
 
 ### 1.2 Architecture Patterns
 
-| Pattern | Description |
-|---------|-------------|
-| Modular Architecture | Domain-driven module organization |
-| Dependency Injection | NestJS DI container |
-| Repository Pattern | Prisma as data access layer |
-| DTO Pattern | Request/Response data transfer objects |
-| Global Exception Filter | Standardized error handling |
+| Pattern                 | Description                            |
+| ----------------------- | -------------------------------------- |
+| Modular Architecture    | Domain-driven module organization      |
+| Dependency Injection    | NestJS DI container                    |
+| Repository Pattern      | Prisma as data access layer            |
+| DTO Pattern             | Request/Response data transfer objects |
+| Global Exception Filter | Standardized error handling            |
 
 ### 1.3 Prerequisites
 
@@ -47,65 +46,68 @@
 ## 2. Architecture Overview
 
 ### 2.1 Module Structure
-
 ```
+
 src/
 ├── modules/
-│   ├── auth/
-│   │   ├── controllers/
-│   │   │   └── auth.controller.ts
-│   │   ├── services/
-│   │   │   ├── auth.service.ts
-│   │   │   └── jwt.service.ts
-│   │   ├── strategies/
-│   │   │   └── jwt.strategy.ts
-│   │   ├── guards/
-│   │   │   └── jwt-auth.guard.ts
-│   │   ├── decorators/
-│   │   │   └── public.decorator.ts
-│   │   ├── dto/
-│   │   │   ├── register.dto.ts
-│   │   │   ├── login.dto.ts
-│   │   │   ├── refresh-token.dto.ts
-│   │   │   └── user-response.dto.ts
-│   │   ├── interfaces/
-│   │   │   └── jwt-payload.interface.ts
-│   │   └── auth.module.ts
-│   ├── users/
-│   │   ├── controllers/
-│   │   │   └── users.controller.ts
-│   │   ├── services/
-│   │   │   └── users.service.ts
-│   │   ├── dto/
-│   │   │   └── create-user.dto.ts
-│   │   └── users.module.ts
-│   └── health/
-│       ├── controllers/
-│       │   └── health.controller.ts
-│       └── health.module.ts
+│ ├── auth/
+│ │ ├── controllers/
+│ │ │ └── auth.controller.ts
+│ │ ├── services/
+│ │ │ ├── auth.service.ts
+│ │ │ └── jwt.service.ts
+│ │ ├── strategies/
+│ │ │ └── jwt.strategy.ts
+│ │ ├── guards/
+│ │ │ └── jwt-auth.guard.ts
+│ │ ├── decorators/
+│ │ │ └── public.decorator.ts
+│ │ ├── dto/
+│ │ │ ├── register.dto.ts
+│ │ │ ├── login.dto.ts
+│ │ │ ├── refresh-token.dto.ts
+│ │ │ └── user-response.dto.ts
+│ │ ├── interfaces/
+│ │ │ └── jwt-payload.interface.ts
+│ │ └── auth.module.ts
+│ ├── users/
+│ │ ├── controllers/
+│ │ │ └── users.controller.ts
+│ │ ├── services/
+│ │ │ └── users.service.ts
+│ │ ├── dto/
+│ │ │ └── create-user.dto.ts
+│ │ └── users.module.ts
+│ └── health/
+│ ├── controllers/
+│ │ └── health.controller.ts
+│ └── health.module.ts
 ├── shared/
-│   ├── decorators/
-│   ├── filters/
-│   │   └── global-exception.filter.ts
-│   ├── interceptors/
-│   │   └── response.interceptor.ts
-│   └── constants/
+│ ├── decorators/
+│ ├── filters/
+│ │ └── global-exception.filter.ts
+│ ├── interceptors/
+│ │ └── response.interceptor.ts
+│ └── constants/
 ├── prisma/
-│   ├── schema.prisma
-│   ├── migrations/
-│   └── seed.ts
+│ ├── schema.prisma
+│ ├── migrations/
+│ └── seed.ts
 ├── config/
-│   └── configuration.ts
+│ └── configuration.ts
 └── main.ts
+
 ```
 
 ### 2.2 Data Flow
 
 ```
-1. Registration:     Client → AuthController → AuthService → UsersService → Prisma → Database
-2. Login:           Client → AuthController → AuthService → JWT → Token Response
-3. Authenticated:   Client → JwtAuthGuard → JwtStrategy → Controller → Service
-4. Refresh:         Client → AuthController → AuthService → Validate RT → New AT
+
+1. Registration: Client → AuthController → AuthService → UsersService → Prisma → Database
+2. Login: Client → AuthController → AuthService → JWT → Token Response
+3. Authenticated: Client → JwtAuthGuard → JwtStrategy → Controller → Service
+4. Refresh: Client → AuthController → AuthService → Validate RT → New AT
+
 ```
 
 ---
@@ -189,120 +191,128 @@ src/
 ### 4.1 Registration
 
 ```
+
 POST /auth/register
 
 Request:
 {
-  "email": "user@example.com",
-  "password": "SecurePass123",
-  "firstName": "John",
-  "lastName": "Doe"
+"email": "user@example.com",
+"password": "SecurePass123",
+"firstName": "John",
+"lastName": "Doe"
 }
 
 Response (201):
 {
-  "statusCode": 201,
-  "message": "User registered successfully",
-  "data": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-    "isEmailVerified": false,
-    "isActive": true,
-    "createdAt": "2026-08-19T10:00:00.000Z"
-  },
-  "timestamp": "2026-08-19T10:00:00.000Z"
+"statusCode": 201,
+"message": "User registered successfully",
+"data": {
+"id": "uuid",
+"email": "user@example.com",
+"firstName": "John",
+"lastName": "Doe",
+"isEmailVerified": false,
+"isActive": true,
+"createdAt": "2026-08-19T10:00:00.000Z"
+},
+"timestamp": "2026-08-19T10:00:00.000Z"
 }
 
 Error (400, 409, 500)
+
 ```
 
 ### 4.2 Login
 
 ```
+
 POST /auth/login
 
 Request:
 {
-  "email": "user@example.com",
-  "password": "SecurePass123"
+"email": "user@example.com",
+"password": "SecurePass123"
 }
 
 Response (200):
 {
-  "statusCode": 200,
-  "message": "Login successful",
-  "data": {
-    "accessToken": "eyJhbGci...",
-    "refreshToken": "eyJhbGci...",
-    "user": {
-      "id": "uuid",
-      "email": "user@example.com",
-      "firstName": "John",
-      "lastName": "Doe"
-    }
-  },
-  "timestamp": "2026-08-19T10:00:00.000Z"
+"statusCode": 200,
+"message": "Login successful",
+"data": {
+"accessToken": "eyJhbGci...",
+"refreshToken": "eyJhbGci...",
+"user": {
+"id": "uuid",
+"email": "user@example.com",
+"firstName": "John",
+"lastName": "Doe"
+}
+},
+"timestamp": "2026-08-19T10:00:00.000Z"
 }
 
 Error (401, 500)
+
 ```
 
 ### 4.3 Refresh Token
 
 ```
+
 POST /auth/refresh
 
 Request:
 {
-  "refreshToken": "eyJhbGci..."
+"refreshToken": "eyJhbGci..."
 }
 
 Response (200):
 {
-  "statusCode": 200,
-  "message": "Token refreshed successfully",
-  "data": {
-    "accessToken": "eyJhbGci..."
-  },
-  "timestamp": "2026-08-19T10:00:00.000Z"
+"statusCode": 200,
+"message": "Token refreshed successfully",
+"data": {
+"accessToken": "eyJhbGci..."
+},
+"timestamp": "2026-08-19T10:00:00.000Z"
 }
 
 Error (401, 500)
+
 ```
 
 ### 4.4 Get Profile
 
 ```
+
 GET /auth/me
 
 Headers:
-  Authorization: Bearer <accessToken>
+Authorization: Bearer <accessToken>
 
 Response (200):
 {
-  "statusCode": 200,
-  "message": "Profile retrieved successfully",
-  "data": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "firstName": "John",
-    "lastName": "Doe",
-    "isEmailVerified": false,
-    "isActive": true,
-    "lastLoginAt": "2026-08-19T10:00:00.000Z",
-    "profile": {
-      "fullName": "John Doe",
-      "completionPct": 0,
-      "isDraft": true
-    }
-  },
-  "timestamp": "2026-08-19T10:00:00.000Z"
+"statusCode": 200,
+"message": "Profile retrieved successfully",
+"data": {
+"id": "uuid",
+"email": "user@example.com",
+"firstName": "John",
+"lastName": "Doe",
+"isEmailVerified": false,
+"isActive": true,
+"lastLoginAt": "2026-08-19T10:00:00.000Z",
+"profile": {
+"fullName": "John Doe",
+"completionPct": 0,
+"isDraft": true
+}
+},
+"timestamp": "2026-08-19T10:00:00.000Z"
 }
 
 Error (401, 500)
-```
+
+````
 
 ---
 
@@ -318,13 +328,13 @@ model Users {
   password         String?   @db.Text
   firstName        String?   @map("first_name") @db.VarChar(255)
   lastName         String?   @map("last_name") @db.VarChar(255)
-  
+
   // New Levora fields
   isEmailVerified  Boolean   @default(false) @map("is_email_verified")
   isActive         Boolean   @default(true) @map("is_active")
   lastLoginAt      DateTime? @map("last_login_at") @db.Timestamptz(6)
   deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
-  
+
   createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime? @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -333,7 +343,7 @@ model Users {
   userProfile      UserProfiles?
   // ... other relations
 }
-```
+````
 
 ### 5.2 New Models to Add
 
@@ -395,29 +405,29 @@ model UserRoles {
 
 ### 6.1 Unit Tests
 
-| Test Suite | Target | Coverage Goal |
-|------------|--------|---------------|
-| AuthService | Register, login, refresh, validation | ≥ 80% |
-| UsersService | CRUD operations, profile creation | ≥ 80% |
-| JwtStrategy | Token validation | ≥ 80% |
+| Test Suite   | Target                               | Coverage Goal |
+| ------------ | ------------------------------------ | ------------- |
+| AuthService  | Register, login, refresh, validation | ≥ 80%         |
+| UsersService | CRUD operations, profile creation    | ≥ 80%         |
+| JwtStrategy  | Token validation                     | ≥ 80%         |
 
 ### 6.2 E2E Tests
 
-| Test Suite | Endpoints to Test |
-|------------|-------------------|
-| Registration Flow | POST /auth/register (success, failure cases) |
-| Login Flow | POST /auth/login (success, failure cases) |
-| Token Refresh | POST /auth/refresh (success, failure cases) |
-| Profile Access | GET /auth/me (authenticated, unauthenticated) |
-| Guard Protection | Protected routes with/without token |
+| Test Suite        | Endpoints to Test                             |
+| ----------------- | --------------------------------------------- |
+| Registration Flow | POST /auth/register (success, failure cases)  |
+| Login Flow        | POST /auth/login (success, failure cases)     |
+| Token Refresh     | POST /auth/refresh (success, failure cases)   |
+| Profile Access    | GET /auth/me (authenticated, unauthenticated) |
+| Guard Protection  | Protected routes with/without token           |
 
 ### 6.3 Integration Tests
 
-| Test Suite | Description |
-|------------|-------------|
-| Database Integration | Verify data persistence |
-| Migration Tests | Verify schema after migration |
-| Seed Tests | Verify roles seeded correctly |
+| Test Suite           | Description                   |
+| -------------------- | ----------------------------- |
+| Database Integration | Verify data persistence       |
+| Migration Tests      | Verify schema after migration |
+| Seed Tests           | Verify roles seeded correctly |
 
 ---
 
@@ -464,16 +474,16 @@ export default () => ({
 
 ## 8. Quality Gates
 
-| Gate | Check | Pass/Fail |
-|------|-------|-----------|
-| Gate 1 | `pnpm lint` passes with no errors | [ ] |
-| Gate 2 | `pnpm test` passes with ≥80% coverage | [ ] |
-| Gate 3 | `pnpm build` completes successfully | [ ] |
-| Gate 4 | All migrations applied successfully | [ ] |
-| Gate 5 | Swagger UI accessible at `/api` | [ ] |
-| Gate 6 | Postman collection exported | [ ] |
-| Gate 7 | SonarQube analysis passes | [ ] |
-| Gate 8 | Health checks functional | [ ] |
+| Gate   | Check                                 | Pass/Fail |
+| ------ | ------------------------------------- | --------- |
+| Gate 1 | `pnpm lint` passes with no errors     | [ ]       |
+| Gate 2 | `pnpm test` passes with ≥80% coverage | [ ]       |
+| Gate 3 | `pnpm build` completes successfully   | [ ]       |
+| Gate 4 | All migrations applied successfully   | [ ]       |
+| Gate 5 | Swagger UI accessible at `/api`       | [ ]       |
+| Gate 6 | Postman collection exported           | [ ]       |
+| Gate 7 | SonarQube analysis passes             | [ ]       |
+| Gate 8 | Health checks functional              | [ ]       |
 
 ---
 
@@ -483,7 +493,9 @@ export default () => ({
 - [System Architecture Design v2.0](../architecture/System_Architecture_Design.md)
 - [AGENTS.md](../AGENTS.md)
 - [SRS v1.0 Section 3.1](../requirements/Levora_SRS.md#31-authentication-account-management)
+
 ```
 
 ---
 
+```

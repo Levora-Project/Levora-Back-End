@@ -1,4 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import {
   ValidationPipe,
@@ -41,7 +42,7 @@ function constraintToErrorCode(constraintKey: string): string {
 }
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bufferLogs: true,
   });
 
@@ -52,7 +53,7 @@ async function bootstrap() {
   const prefix = config.get<string>('app.API_PREFIX', 'api');
   const nodeEnv = config.get<string>('app.NODE_ENV', 'development');
 
-  app.getHttpAdapter().getInstance().disable('x-powered-by');
+  app.disable('x-powered-by');
   app.use(helmet());
   app.use(compression());
   app.use(cookieParser());
@@ -130,14 +131,13 @@ async function bootstrap() {
   });
 
   // Serve swagger JSON at /api-json
-  app
-    .getHttpAdapter()
-    .get(
-      '/api-json',
-      (_req: unknown, res: { json: (data: unknown) => void }) => {
-        res.json(document);
-      },
-    );
+  app.getHttpAdapter().get(
+    '/api-json',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (_req: any, res: any) => {
+      res.json(document);
+    },
+  );
 
   app.enableShutdownHooks();
 

@@ -94,6 +94,7 @@ jobs:
       REDIS_PORT: 6379
       PORT: 3000
       JWT_SECRET: ci-cd-test-jwt-secret-key-minimum-32-chars-long
+      OAUTH_ENCRYPTION_KEY: 'test-encryption-key-32charslong!!'
 
     steps:
       - name: Checkout repository
@@ -186,6 +187,7 @@ jobs:
             -e REDIS_PORT="6379" \
             -e JWT_SECRET="ci-cd-test-jwt-secret-key-minimum-32-chars-long" \
             -e LOG_LEVEL="info" \
+            -e OAUTH_ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \
             levora-backend:test
 
       - name: Wait for Container Readiness
@@ -467,7 +469,7 @@ jobs:
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY_STAGING }}
           SERVICE_ID: ${{ secrets.RENDER_PREVIEW_SERVICE_ID }}
-          BRANCH: "main"
+          BRANCH: 'main'
         run: |
           if [ -z "$RENDER_API_KEY" ] || [ -z "$SERVICE_ID" ]; then
             echo "::warn::RENDER_API_KEY_STAGING or RENDER_PREVIEW_SERVICE_ID is not configured. Skipping branch reset."

@@ -8,6 +8,7 @@ export const securityConfigSchema = z.object({
     .string()
     .default('http://localhost:3000')
     .transform((val) => val.split(',')),
+  ALLOWED_ORIGINS: z.string().optional(),
   THROTTLE_TTL: z.coerce.number().default(60000),
   THROTTLE_LIMIT: z.coerce.number().default(100),
   JWT_SECRET: z
@@ -32,6 +33,7 @@ export type SecurityConfig = z.infer<typeof securityConfigSchema>;
 export const securityConfig = () => ({
   security: securityConfigSchema.parse({
     CORS_ORIGINS: process.env.CORS_ORIGINS,
+    ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS,
     THROTTLE_TTL: process.env.THROTTLE_TTL,
     THROTTLE_LIMIT: process.env.THROTTLE_LIMIT,
     JWT_SECRET: process.env.JWT_SECRET,

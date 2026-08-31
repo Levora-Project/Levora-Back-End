@@ -2,15 +2,26 @@ import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
-import { AuthService } from './auth.service';
-import { AuthController } from './auth.controller';
-import { JwtStrategy } from './strategies/jwt.strategy';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { PrismaModule } from '@/prisma';
 import { UsersModule } from '@/modules/users/users.module';
 import {
   UsersRepository,
   UserRolesRepository,
 } from '@/modules/users/repositories';
+import { AuthService } from './auth.service';
+import { AuthController } from './auth.controller';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { OAuthGuard } from './guards/oauth.guard';
+import { CsrfOriginGuard } from './guards/csrf-origin.guard';
+import {
+  EncryptionService,
+  OauthIdentityService,
+  OAuthProcessorService,
+  OAuthService,
+} from './services';
+import { getStrategyClass } from './config/strategy.registry';
+import { getAllSupportedProviders } from './config/providers.config';
 
 @Module({
   imports: [
@@ -19,10 +30,7 @@ import {
       global: true,
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        secret:
-          config.get<string>('security.JWT_SECRET') ||
-          config.get<string>('JWT_SECRET') ||
-          'dev-only-secret-do-not-use-in-production!!',
+        secret: config.get<string>('security.JWT_SECRET'),
         signOptions: {
           expiresIn: config.get<string>(
             'security.JWT_ACCESS_EXPIRES',
@@ -31,6 +39,7 @@ import {
         },
       }),
     }),
+    PrismaModule,
     forwardRef(() => UsersModule),
   ],
   controllers: [AuthController],
@@ -40,7 +49,18 @@ import {
     JwtAuthGuard,
     UsersRepository,
     UserRolesRepository,
+    OAuthService,
+    OAuthGuard,
+    CsrfOriginGuard,
+    EncryptionService,
+    OauthIdentityService,
+    OAuthProcessorService,
+    ...getAllSupportedProviders()
+      .map((provider) => getStrategyClass(provider))
+      .filter(
+        (strategy): strategy is NonNullable<typeof strategy> => !!strategy,
+      ),
   ],
-  exports: [AuthService, JwtStrategy, JwtAuthGuard],
+  exports: [AuthService, JwtAuthGuard, OAuthService],
 })
 export class AuthModule {}

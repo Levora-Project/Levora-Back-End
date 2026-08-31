@@ -68,7 +68,7 @@ export class TransformInterceptor implements NestInterceptor {
     >(DEPRECATED_KEY, [context.getHandler(), context.getClass()]);
 
     return next.handle().pipe(
-      map((responseData) => {
+      map((responseData: unknown) => {
         const statusCode = response.statusCode;
         const duration = Date.now() - startTime;
 
