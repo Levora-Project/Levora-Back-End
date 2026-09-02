@@ -286,149 +286,155 @@ export class ProfileService {
       throw new BadRequestException('Cannot clear required field fieldOfStudy');
     }
 
-    await this.prisma.$transaction(async (prisma) => {
-      const { skills, languages, gpaValue, gpaScale, ...profileData } = data;
+    await this.prisma.$transaction(
+      async (prisma) => {
+        const { skills, languages, gpaValue, gpaScale, ...profileData } = data;
 
-      await prisma.userProfiles.update({
-        where: { userId },
-        data: profileData,
-      });
+        await prisma.userProfiles.update({
+          where: { userId },
+          data: profileData,
+        });
 
-      if (skills) {
-        if (skills.length > 20) {
-          throw new BadRequestException('Maximum 20 skills allowed');
-        }
-        await prisma.userSkills.deleteMany({ where: { userId } });
-        for (const skill of skills) {
-          const exists = await prisma.skillsMaster.findUnique({
-            where: { id: skill.skillId },
-          });
-          if (!exists) {
-            throw new BadRequestException(`Skill ${skill.skillId} not found`);
+        if (skills) {
+          if (skills.length > 20) {
+            throw new BadRequestException('Maximum 20 skills allowed');
           }
+          await prisma.userSkills.deleteMany({ where: { userId } });
+          for (const skill of skills) {
+            const exists = await prisma.skillsMaster.findUnique({
+              where: { id: skill.skillId },
+            });
+            if (!exists) {
+              throw new BadRequestException(`Skill ${skill.skillId} not found`);
+            }
 
-          await prisma.userSkills.create({
-            data: {
-              userId,
-              skillId: skill.skillId,
-              proficiency: skill.proficiency,
-            },
-          });
+            await prisma.userSkills.create({
+              data: {
+                userId,
+                skillId: skill.skillId,
+                proficiency: skill.proficiency,
+              },
+            });
+          }
         }
-      }
 
-      if (languages) {
-        if (languages.length > 5) {
-          throw new BadRequestException('Maximum 5 languages allowed');
+        if (languages) {
+          if (languages.length > 5) {
+            throw new BadRequestException('Maximum 5 languages allowed');
+          }
+          await prisma.userLanguages.deleteMany({ where: { userId } });
+          for (const lang of languages) {
+            const exists = await prisma.languagesMaster.findUnique({
+              where: { id: lang.languageId },
+            });
+            if (!exists) {
+              throw new BadRequestException(
+                `Language ${lang.languageId} not found`,
+              );
+            }
+
+            await prisma.userLanguages.create({
+              data: {
+                userId,
+                languageId: lang.languageId,
+                proficiency: lang.proficiency,
+              },
+            });
+          }
         }
-        await prisma.userLanguages.deleteMany({ where: { userId } });
-        for (const lang of languages) {
-          const exists = await prisma.languagesMaster.findUnique({
-            where: { id: lang.languageId },
-          });
-          if (!exists) {
+
+        if (gpaValue !== undefined && gpaScale) {
+          if (!validateGPARange(gpaValue, gpaScale)) {
             throw new BadRequestException(
-              `Language ${lang.languageId} not found`,
+              'Invalid GPA range for selected scale',
             );
           }
+          const normalized = normalizeGPA(gpaValue, gpaScale);
 
-          await prisma.userLanguages.create({
-            data: {
-              userId,
-              languageId: lang.languageId,
-              proficiency: lang.proficiency,
+          const educations = await prisma.userEducations.findMany({
+            where: { userId },
+          });
+          if (educations.length > 0) {
+            const ed = educations[0];
+            await prisma.userEducations.update({
+              where: { id: ed.id },
+              data: {
+                gpaRaw: typeof gpaValue === 'number' ? gpaValue : null,
+                gpaRawScale:
+                  gpaScale === '4.0'
+                    ? 4.0
+                    : gpaScale === 'percentage'
+                      ? 100
+                      : null,
+                gpaNormalized4: normalized,
+              },
+            });
+          } else {
+            await prisma.userEducations.create({
+              data: {
+                userId,
+                degree: 'Unknown',
+                major: 'Unknown',
+                institution: 'Unknown',
+                gpaRaw: typeof gpaValue === 'number' ? gpaValue : null,
+                gpaRawScale:
+                  gpaScale === '4.0'
+                    ? 4.0
+                    : gpaScale === 'percentage'
+                      ? 100
+                      : null,
+                gpaNormalized4: normalized,
+              },
+            });
+          }
+        } else if (gpaScale && gpaValue === undefined) {
+          const educations = await prisma.userEducations.findMany({
+            where: { userId },
+          });
+          if (educations.length > 0) {
+            await prisma.userEducations.update({
+              where: { id: educations[0].id },
+              data: {
+                gpaRaw: null,
+                gpaRawScale:
+                  gpaScale === '4.0'
+                    ? 4.0
+                    : gpaScale === 'percentage'
+                      ? 100
+                      : null,
+                gpaNormalized4: null,
+              },
+            });
+          }
+        }
+
+        const updatedProfileWithRelations =
+          await prisma.userProfiles.findUnique({
+            where: { userId },
+            include: {
+              user: {
+                select: {
+                  userSkills: true,
+                  userLanguages: true,
+                  documents: true,
+                },
+              },
             },
           });
-        }
-      }
 
-      if (gpaValue !== undefined && gpaScale) {
-        if (!validateGPARange(gpaValue, gpaScale)) {
-          throw new BadRequestException('Invalid GPA range for selected scale');
-        }
-        const normalized = normalizeGPA(gpaValue, gpaScale);
+        const pct = this.calculateCompletionPct(updatedProfileWithRelations!);
+        const isCore = this.isCoreFieldsComplete(updatedProfileWithRelations!);
 
-        const educations = await prisma.userEducations.findMany({
+        await prisma.userProfiles.update({
           where: { userId },
-        });
-        if (educations.length > 0) {
-          const ed = educations[0];
-          await prisma.userEducations.update({
-            where: { id: ed.id },
-            data: {
-              gpaRaw: typeof gpaValue === 'number' ? gpaValue : null,
-              gpaRawScale:
-                gpaScale === '4.0'
-                  ? 4.0
-                  : gpaScale === 'percentage'
-                    ? 100
-                    : null,
-              gpaNormalized4: normalized,
-            },
-          });
-        } else {
-          await prisma.userEducations.create({
-            data: {
-              userId,
-              degree: 'Unknown',
-              major: 'Unknown',
-              institution: 'Unknown',
-              gpaRaw: typeof gpaValue === 'number' ? gpaValue : null,
-              gpaRawScale:
-                gpaScale === '4.0'
-                  ? 4.0
-                  : gpaScale === 'percentage'
-                    ? 100
-                    : null,
-              gpaNormalized4: normalized,
-            },
-          });
-        }
-      } else if (gpaScale && gpaValue === undefined) {
-        const educations = await prisma.userEducations.findMany({
-          where: { userId },
-        });
-        if (educations.length > 0) {
-          await prisma.userEducations.update({
-            where: { id: educations[0].id },
-            data: {
-              gpaRaw: null,
-              gpaRawScale:
-                gpaScale === '4.0'
-                  ? 4.0
-                  : gpaScale === 'percentage'
-                    ? 100
-                    : null,
-              gpaNormalized4: null,
-            },
-          });
-        }
-      }
-
-      const updatedProfileWithRelations = await prisma.userProfiles.findUnique({
-        where: { userId },
-        include: {
-          user: {
-            select: {
-              userSkills: true,
-              userLanguages: true,
-              documents: true,
-            },
+          data: {
+            completionPct: pct,
+            isDraft: !isCore,
           },
-        },
-      });
-
-      const pct = this.calculateCompletionPct(updatedProfileWithRelations!);
-      const isCore = this.isCoreFieldsComplete(updatedProfileWithRelations!);
-
-      await prisma.userProfiles.update({
-        where: { userId },
-        data: {
-          completionPct: pct,
-          isDraft: !isCore,
-        },
-      });
-    });
+        });
+      },
+      { timeout: 30000 },
+    );
 
     return this.getProfileWithDetails(userId);
   }
