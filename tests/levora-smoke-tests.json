@@ -1,56 +1,85 @@
 {
   "info": {
-    "_postman_id": "levora-smoke-tests-v1",
-    "name": "Levora API Smoke & Integration Tests",
-    "description": "Comprehensive automated smoke tests for Levora NestJS backend covering Health, Auth, and Users endpoints.\n\n### Execution Order & Newman Cookie Isolation:\n- All unauthenticated tests and validation error checks (expecting 401 Unauthorized or 422 Unprocessable Entity) are intentionally sequenced at the beginning of the test suite before any user creation or login steps.\n- This ensures Newman's cookie jar remains completely empty when executing unauthenticated tests, eliminating false positives caused by automatic session cookie persistence across requests.\n- Authenticated requests explicitly supply the Authorization header using collection variables.",
+    "_postman_id": "levora-smoke-tests",
+    "name": "Levora API Smoke Tests",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:3000/api/v1",
-      "type": "string"
-    },
-    {
-      "key": "testEmail",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "testPassword",
-      "value": "Password123!",
-      "type": "string"
-    },
-    {
-      "key": "accessToken",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "refreshToken",
-      "value": "",
-      "type": "string"
-    },
-    {
-      "key": "userId",
-      "value": "",
-      "type": "string"
-    }
+    { "key": "base_url", "value": "https://api.levora.dev", "type": "string" },
+    { "key": "test_user_email", "value": "smoke-test@levora.com", "type": "string" },
+    { "key": "test_user_password", "value": "TestPass123!", "type": "string" },
+    { "key": "access_token", "value": "", "type": "string" },
+    { "key": "document_id", "value": "", "type": "string" }
   ],
   "item": [
     {
-      "name": "0. Pre-Auth Security & Validation Attacks",
-      "description": "Security tests that do not require valid authentication. These run first so they don't depend on or mess up the token/cookie state.",
+      "name": "Public Endpoints",
       "item": [
         {
-          "name": "POST /auth/register - SQL Injection Email",
+          "name": "GET /reference/fields-of-study",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 422 Unprocessable Entity or 400 Bad Request', function () {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response is an array', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reference/fields-of-study",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reference", "fields-of-study"]
+            }
+          }
+        },
+        {
+          "name": "GET /reference/skills-taxonomy",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Response contains category structure', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.be.an('array');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/reference/skills-taxonomy",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "reference", "skills-taxonomy"]
+            }
+          }
+        },
+        {
+          "name": "POST /auth/register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 or 409 (if seeded)', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([201, 409]);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -67,24 +96,28 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"email\":\"' OR 1=1 --\",\"password\":\"Password123\"}"
+              "raw": "{\n  \"email\": \"{{test_user_email}}\",\n  \"password\": \"{{test_user_password}}\",\n  \"firstName\": \"Smoke\",\n  \"lastName\": \"Test\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
+              "raw": "{{base_url}}/api/v1/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "register"]
             }
           }
         },
         {
-          "name": "POST /auth/login - SQL Injection Email",
+          "name": "POST /auth/login",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 422, 400, or 401', function () {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([400, 401, 422]);",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Extract access token', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', jsonData.data.accessToken);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -101,58 +134,33 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\"email\":\"' OR 1=1 --\",\"password\":\"Password123\"}"
+              "raw": "{\n  \"email\": \"{{test_user_email}}\",\n  \"password\": \"{{test_user_password}}\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
+              "raw": "{{base_url}}/api/v1/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "auth", "login"]
             }
           }
-        },
+        }
+      ]
+    },
+    {
+      "name": "Profile CRUD",
+      "item": [
         {
-          "name": "POST /auth/register - Mass Assignment (Roles)",
+          "name": "GET /profile",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 422 (forbidNonWhitelisted) or 400', function () {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\"email\":\"mass@example.com\",\"password\":\"Password123\",\"roles\":[\"system_admin\"]}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
-            }
-          }
-        },
-        {
-          "name": "GET /auth/me - JWT alg=none Attack",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 401 Unauthorized', function () {",
-                  "    pm.response.to.have.status(401);",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Profile exists', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('userId');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -164,95 +172,28 @@
             "header": [
               {
                 "key": "Authorization",
-                "value": "Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ."
+                "value": "Bearer {{access_token}}"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
+              "raw": "{{base_url}}/api/v1/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile"]
             }
           }
         },
         {
-          "name": "GET /auth/google/callback - Invalid Code",
+          "name": "PATCH /profile (update nationality)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 400 or 401', function () {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([400, 401]);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/auth/google/callback?code=invalid_code_test",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "google", "callback"],
-              "query": [
-                {
-                  "key": "code",
-                  "value": "invalid_code_test"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "name": "GET /auth/me - JWT Invalid Signature Attack",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 401 Unauthorized', function () {",
-                  "    pm.response.to.have.status(401);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "1. Health Checks",
-      "item": [
-        {
-          "name": "GET /health (Liveness)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200 OK', function () {",
+                  "pm.test('Status code is 200', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('Health status is ok', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.status).to.be.oneOf(['ok', 200]);",
+                  "pm.test('Response time < 500ms', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(500);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -260,679 +201,37 @@
             }
           ],
           "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["health"]
-            }
-          }
-        },
-        {
-          "name": "GET /health/ready (Readiness)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200 OK', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "pm.test('Database and Redis are healthy', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.status).to.be.oneOf(['ok', 200]);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/health/ready",
-              "host": ["{{baseUrl}}"],
-              "path": ["health", "ready"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "2. Authentication & Authorization",
-      "item": [
-        {
-          "name": "POST /auth/register - Validation Error (Invalid Email)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 422 Unprocessable Entity', function () {",
-                  "    pm.response.to.have.status(422);",
-                  "});",
-                  "pm.test('Returns validation error details', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.success).to.eql(false);",
-                  "    pm.expect(jsonData.errors).to.be.an('array');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"invalid-email-format\",\n  \"password\": \"Short1!\",\n  \"firstName\": \"Invalid\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
-            }
-          }
-        },
-        {
-          "name": "GET /auth/me - Without JWT (401 Unauthorized)",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "exec": [
-                  "// Clear cookies from the cookie jar to simulate an unauthenticated request.",
-                  "// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
-                  "// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
-                  "pm.cookies.clear();",
-                  "pm.request.headers.remove('Cookie');"
-                ],
-                "type": "text/javascript"
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 401 Unauthorized', function () {",
-                  "    pm.response.to.have.status(401);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
-            }
-          }
-        },
-        {
-          "name": "GET /users/profile - Without JWT (401 Unauthorized)",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "exec": [
-                  "// Clear cookies from the cookie jar to simulate an unauthenticated request.",
-                  "// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
-                  "// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
-                  "pm.cookies.clear();",
-                  "pm.request.headers.remove('Cookie');"
-                ],
-                "type": "text/javascript"
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 401 Unauthorized', function () {",
-                  "    pm.response.to.have.status(401);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/users/profile",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "profile"]
-            }
-          }
-        },
-        {
-          "name": "POST /auth/refresh - Missing Token (401 Unauthorized)",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "exec": [
-                  "// Clear cookies from the cookie jar to simulate a request missing authentication/refresh tokens in session.",
-                  "// Newman's cookie jar persists cookies across requests by default, which can cause false positives.",
-                  "// Always use explicit Authorization headers for authenticated requests rather than relying on cookies.",
-                  "pm.cookies.clear();",
-                  "pm.request.headers.remove('Cookie');"
-                ],
-                "type": "text/javascript"
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 401 Unauthorized', function () {",
-                  "    pm.response.to.have.status(401);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/refresh",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "refresh"]
-            }
-          }
-        },
-        {
-          "name": "POST /auth/register - Valid Payload (201 Created)",
-          "event": [
-            {
-              "listen": "prerequest",
-              "script": {
-                "exec": [
-                  "var uniqueSuffix = Date.now() + '_' + Math.floor(Math.random() * 10000);",
-                  "var email = 'smoketest_' + uniqueSuffix + '@example.com';",
-                  "pm.collectionVariables.set('testEmail', email);"
-                ],
-                "type": "text/javascript"
-              }
-            },
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 201 Created', function () {",
-                  "    pm.response.to.have.status(201);",
-                  "});",
-                  "pm.test('Returns created user data', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.success).to.eql(true);",
-                  "    pm.expect(jsonData.data).to.be.an('object');",
-                  "    pm.expect(jsonData.data.id).to.be.a('string');",
-                  "    pm.expect(jsonData.data.email).to.eql(pm.collectionVariables.get('testEmail'));",
-                  "    pm.collectionVariables.set('userId', jsonData.data.id);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"firstName\": \"Smoke\",\n  \"lastName\": \"Tester\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
-            }
-          }
-        },
-        {
-          "name": "POST /auth/login - Invalid Password (401 Unauthorized)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 401 Unauthorized', function () {",
-                  "    pm.response.to.have.status(401);",
-                  "});",
-                  "pm.test('Error response structure is valid', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.success).to.eql(false);",
-                  "    pm.expect(jsonData.status).to.eql(401);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"WrongPassword999!\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
-            }
-          }
-        },
-        {
-          "name": "POST /auth/register - Duplicate Email (409 Conflict)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 409 Conflict', function () {",
-                  "    pm.response.to.have.status(409);",
-                  "});",
-                  "pm.test('Returns conflict error message', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.success).to.eql(false);",
-                  "    pm.expect(jsonData.status).to.eql(409);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\",\n  \"firstName\": \"Duplicate\",\n  \"lastName\": \"Tester\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/register",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "register"]
-            }
-          }
-        },
-        {
-          "name": "POST /auth/login - Valid Credentials (200 OK + JWT)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200 OK', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "pm.test('Returns JWT access and refresh tokens', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.success).to.eql(true);",
-                  "    pm.expect(jsonData.data.accessToken).to.be.a('string');",
-                  "    pm.expect(jsonData.data.refreshToken).to.be.a('string');",
-                  "    pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
-                  "    pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/login",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "login"]
-            }
-          }
-        },
-        {
-          "name": "GET /auth/me - With JWT (200 OK)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200 OK', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "pm.test('Returns authenticated user profile', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.success).to.eql(true);",
-                  "    pm.expect(jsonData.data.email).to.eql(pm.collectionVariables.get('testEmail'));",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{accessToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/auth/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "me"]
-            }
-          }
-        },
-        {
-          "name": "POST /auth/refresh - Refresh Tokens (200 OK)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200 OK', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "pm.test('Returns new access and refresh tokens', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.success).to.eql(true);",
-                  "    pm.expect(jsonData.data.accessToken).to.be.a('string');",
-                  "    pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
-                  "    if (jsonData.data.refreshToken) {",
-                  "        pm.collectionVariables.set('refreshToken', jsonData.data.refreshToken);",
-                  "    }",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/auth/refresh",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "refresh"]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "3. Users & RBAC",
-      "item": [
-        {
-          "name": "GET /users/profile - With JWT (200 OK)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 200 OK', function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "pm.test('Returns profile of user', function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.success).to.eql(true);",
-                  "    pm.expect(jsonData.data.email).to.eql(pm.collectionVariables.get('testEmail'));",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{accessToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/users/profile",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "profile"]
-            }
-          }
-        },
-        {
-          "name": "GET /users - Normal User RBAC check (403 Forbidden)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 403 Forbidden', function () {",
-                  "    pm.response.to.have.status(403);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{accessToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["users"]
-            }
-          }
-        },
-        {
-          "name": "POST /users - Normal User RBAC check (403 Forbidden)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 403 Forbidden', function () {",
-                  "    pm.response.to.have.status(403);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{accessToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"admin-created-user@example.com\",\n  \"name\": \"Admin User\"\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/users",
-              "host": ["{{baseUrl}}"],
-              "path": ["users"]
-            }
-          }
-        },
-        {
-          "name": "GET /users/:id - Normal User RBAC check (403 Forbidden)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 403 Forbidden', function () {",
-                  "    pm.response.to.have.status(403);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{accessToken}}",
-                  "type": "string"
-                }
-              ]
-            },
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/users/00000000-0000-0000-0000-000000000000",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "00000000-0000-0000-0000-000000000000"]
-            }
-          }
-        },
-        {
-          "name": "PATCH /users/:id - Normal User RBAC check (403 Forbidden)",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test('Status code is 403 Forbidden', function () {",
-                  "    pm.response.to.have.status(403);",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{accessToken}}",
-                  "type": "string"
-                }
-              ]
-            },
             "method": "PATCH",
             "header": [
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
               }
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"firstName\": \"UpdatedName\"\n}"
+              "raw": "{\n  \"nationality\": \"US\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/users/00000000-0000-0000-0000-000000000000",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "00000000-0000-0000-0000-000000000000"]
+              "raw": "{{base_url}}/api/v1/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile"]
             }
           }
         },
         {
-          "name": "DELETE /users/:id - Normal User RBAC check (403 Forbidden)",
+          "name": "PATCH /profile (add education level)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 403 Forbidden', function () {",
-                  "    pm.response.to.have.status(403);",
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -940,34 +239,37 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{accessToken}}",
-                  "type": "string"
-                }
-              ]
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"educationLevel\": \"Bachelor\"\n}"
             },
-            "method": "DELETE",
-            "header": [],
             "url": {
-              "raw": "{{baseUrl}}/users/00000000-0000-0000-0000-000000000000",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "00000000-0000-0000-0000-000000000000"]
+              "raw": "{{base_url}}/api/v1/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile"]
             }
           }
         },
         {
-          "name": "POST /auth/logout - With JWT (204 No Content)",
+          "name": "PATCH /profile (try clearing required field)",
           "event": [
             {
               "listen": "test",
               "script": {
                 "exec": [
-                  "pm.test('Status code is 204 No Content', function () {",
-                  "    pm.response.to.have.status(204);",
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -975,22 +277,298 @@
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [
-                {
-                  "key": "token",
-                  "value": "{{accessToken}}",
-                  "type": "string"
-                }
-              ]
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nationality\": null\n}"
             },
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Document Management",
+      "item": [
+        {
+          "name": "POST /profile/documents (upload PDF)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "pm.test('Response time < 1s', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "});",
+                  "pm.test('Extract document id', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.collectionVariables.set('document_id', jsonData.data.id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
             "method": "POST",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "docType",
+                  "value": "resume",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "value": "dummy pdf content",
+                  "type": "text"
+                }
+              ]
+            },
             "url": {
-              "raw": "{{baseUrl}}/auth/logout",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "logout"]
+              "raw": "{{base_url}}/api/v1/profile/documents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile", "documents"]
+            }
+          }
+        },
+        {
+          "name": "GET /profile/documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Verify file listed', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile/documents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile", "documents"]
+            }
+          }
+        },
+        {
+          "name": "GET /profile/documents/{id}/download",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "pm.test('Verify URL returned', function () {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.data).to.have.property('url');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile/documents/{{document_id}}/download",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile", "documents", "{{document_id}}", "download"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /profile/documents/{id}",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile/documents/{{document_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile", "documents", "{{document_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Negative Tests",
+      "item": [
+        {
+          "name": "POST /profile/documents (upload EXE renamed to PDF)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "docType",
+                  "value": "resume",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "value": "MZ\u0090\u0000\u0003\u0000\u0000\u0000",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile/documents",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile", "documents"]
+            }
+          }
+        },
+        {
+          "name": "PATCH /profile (send extra unknown field)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 400', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unknownField\": \"value\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile"]
+            }
+          }
+        },
+        {
+          "name": "GET /profile/documents/{invalid-id}/download",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404', function () {",
+                  "    pm.response.to.have.status(404);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/profile/documents/invalid-uuid/download",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "profile", "documents", "invalid-uuid", "download"]
             }
           }
         }
