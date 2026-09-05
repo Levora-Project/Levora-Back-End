@@ -17,6 +17,7 @@ import {
   securityConfig,
   uploadConfig,
   oauthConfig,
+  storageConfig,
 } from '@config/index';
 import { PrismaModule } from '@/prisma';
 import { RedisModule } from '@/redis';
@@ -25,6 +26,7 @@ import { UsersModule } from '@modules/users';
 import { AuthModule } from '@modules/auth';
 import { AuthGuard, RolesGuard, IdempotencyGuard } from '@common/guards';
 import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
+import { ProfileModule } from './modules/profile/profile.module';
 
 @Module({
   imports: [
@@ -39,6 +41,7 @@ import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
         securityConfig,
         uploadConfig,
         oauthConfig,
+        storageConfig,
       ],
       envFilePath: ['.env.local', '.env'],
     }),
@@ -244,6 +247,7 @@ import { RequestIdMiddleware, IdempotencyMiddleware } from '@common/middleware';
     HealthModule,
     AuthModule,
     UsersModule,
+    ProfileModule,
   ],
   providers: [
     // Global throttler guard

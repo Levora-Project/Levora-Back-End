@@ -5,7 +5,7 @@ import {
   ValidationPipe,
   VersioningType,
   Logger,
-  UnprocessableEntityException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -96,7 +96,7 @@ async function bootstrap() {
             message: (err.constraints ?? {})[constraintKey],
           })),
         );
-        return new UnprocessableEntityException({
+        return new BadRequestException({
           message: 'Validation failed',
           errors: errList,
         });
@@ -135,6 +135,7 @@ async function bootstrap() {
     '/api-json',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (_req: any, res: any) => {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
       res.json(document);
     },
   );

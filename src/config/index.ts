@@ -5,3 +5,4 @@ export { redisConfig } from './redis.config';
 export { securityConfig } from './security.config';
 export { uploadConfig } from './upload.config';
 export { oauthConfig } from './oauth.config';
+export { storageConfig } from './storage.config';

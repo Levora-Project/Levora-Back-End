@@ -71,7 +71,7 @@ This module serves as the foundation for the Discovery & Matching engine (Sprint
 
 | ID        | Requirement                                                                                                    | Priority  |
 | --------- | -------------------------------------------------------------------------------------------------------------- | --------- |
-| FR-003-08 | The system shall provide `POST /profile/documents` accepting multipart/form-data with `documentType`.          | Must-Have |
+| FR-003-08 | The system shall provide `POST /profile/documents` accepting multipart/form-data with `docType`.          | Must-Have |
 | FR-003-09 | The system shall validate file size (max 5MB), MIME type (PDF, DOC, DOCX, PNG, JPG), and extension (same set). | Must-Have |
 | FR-003-10 | The system shall validate MIME type using file signature (magic bytes) not just extension.                     | Must-Have |
 | FR-003-11 | The system shall enforce a soft cap of 20 documents per user.                                                  | Must-Have |
