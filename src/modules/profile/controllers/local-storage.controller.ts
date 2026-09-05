@@ -15,6 +15,9 @@ import * as path from 'path';
 
 import { ConfigService } from '@nestjs/config';
 
+import { Public } from '../../../common/decorators/public.decorator';
+import * as crypto from 'crypto';
+
 @ApiTags('storage')
 @Controller('local-storage')
 export class LocalStorageController {
@@ -23,6 +26,7 @@ export class LocalStorageController {
     private readonly configService: ConfigService,
   ) {}
 
+  @Public()
   @Get(':key')
   @ApiOperation({ summary: 'Download file from local storage' })
   async downloadFile(
@@ -37,14 +41,42 @@ export class LocalStorageController {
     try {
       const decoded = JSON.parse(
         Buffer.from(token, 'base64').toString('utf-8'),
-      ) as { key: string; exp: number };
-      if (decoded.key !== key) {
+      ) as { payload: string; signature: string };
+
+      const secret = this.configService.get<string>(
+        'storage.encryption.key',
+      ) as string;
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(decoded.payload)
+        .digest('hex');
+
+      // Use timingSafeEqual to prevent timing attacks
+      if (
+        !crypto.timingSafeEqual(
+          Buffer.from(decoded.signature),
+          Buffer.from(expectedSignature),
+        )
+      ) {
+        throw new BadRequestException('Invalid token signature');
+      }
+
+      const parsedPayload = JSON.parse(decoded.payload) as {
+        key: string;
+        exp: number;
+      };
+      const { key: tokenKey, exp } = parsedPayload;
+
+      if (tokenKey !== key) {
         throw new BadRequestException('Invalid token for this file');
       }
-      if (Date.now() > decoded.exp) {
+      if (Date.now() > exp) {
         throw new BadRequestException('Token has expired');
       }
-    } catch {
+    } catch (e) {
+      if (e instanceof BadRequestException) {
+        throw e;
+      }
       throw new BadRequestException('Invalid token');
     }
 
@@ -54,9 +86,9 @@ export class LocalStorageController {
       const ivBuffer = buffer.subarray(0, 16);
       const encryptedData = buffer.subarray(16);
 
-      const encryptionKey =
-        this.configService.get<string>('storage.encryption.key') ||
-        '0000000000000000000000000000000000000000000000000000000000000000';
+      const encryptionKey = this.configService.get<string>(
+        'storage.encryption.key',
+      ) as string;
       const decrypted = decryptFile(
         encryptedData,
         encryptionKey,

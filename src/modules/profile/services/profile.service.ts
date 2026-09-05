@@ -252,6 +252,15 @@ export class ProfileService {
   async updateProfile(userId: string, data: UpdateProfileDto) {
     const currentProfile = await this.prisma.userProfiles.findUnique({
       where: { userId },
+      include: {
+        user: {
+          select: {
+            userSkills: true,
+            userLanguages: true,
+            documents: true,
+          },
+        },
+      },
     });
 
     if (!currentProfile) {
@@ -261,12 +270,6 @@ export class ProfileService {
     if (data.fieldOfStudy !== undefined && data.fieldOfStudy.length === 0) {
       throw new BadRequestException(
         'fieldOfStudy must contain at least one value',
-      );
-    }
-
-    if (data.gpaScale && data.gpaValue === undefined) {
-      throw new BadRequestException(
-        'gpaValue is required when updating GPA scale',
       );
     }
 
@@ -286,13 +289,43 @@ export class ProfileService {
       throw new BadRequestException('Cannot clear required field fieldOfStudy');
     }
 
+    const { skills, languages, gpaValue, gpaScale, ...profileData } = data;
+
+    // Build a merged in-memory view of the profile after applying updates,
+    // so we can calculate completionPct / isDraft without an extra DB round-trip.
+    const mergedProfile: ProfileWithRelations = {
+      ...currentProfile,
+      ...profileData,
+      user: {
+        userSkills: skills
+          ? skills.map((s) => ({
+              skillId: s.skillId,
+              proficiency: s.proficiency,
+            }))
+          : (currentProfile.user?.userSkills ?? []),
+        userLanguages: languages
+          ? languages.map((l) => ({
+              languageId: l.languageId,
+              proficiency: l.proficiency,
+            }))
+          : (currentProfile.user?.userLanguages ?? []),
+        documents: currentProfile.user?.documents ?? [],
+      },
+    };
+
+    const newPct = this.calculateCompletionPct(mergedProfile);
+    const newIsCore = this.isCoreFieldsComplete(mergedProfile);
+
     await this.prisma.$transaction(
       async (prisma) => {
-        const { skills, languages, gpaValue, gpaScale, ...profileData } = data;
-
+        // Single profile update (includes pct + isDraft)
         await prisma.userProfiles.update({
           where: { userId },
-          data: profileData,
+          data: {
+            ...profileData,
+            completionPct: newPct,
+            isDraft: !newIsCore,
+          },
         });
 
         if (skills) {
@@ -307,7 +340,6 @@ export class ProfileService {
             if (!exists) {
               throw new BadRequestException(`Skill ${skill.skillId} not found`);
             }
-
             await prisma.userSkills.create({
               data: {
                 userId,
@@ -332,7 +364,6 @@ export class ProfileService {
                 `Language ${lang.languageId} not found`,
               );
             }
-
             await prisma.userLanguages.create({
               data: {
                 userId,
@@ -350,14 +381,12 @@ export class ProfileService {
             );
           }
           const normalized = normalizeGPA(gpaValue, gpaScale);
-
           const educations = await prisma.userEducations.findMany({
             where: { userId },
           });
           if (educations.length > 0) {
-            const ed = educations[0];
             await prisma.userEducations.update({
-              where: { id: ed.id },
+              where: { id: educations[0].id },
               data: {
                 gpaRaw: typeof gpaValue === 'number' ? gpaValue : null,
                 gpaRawScale:
@@ -407,35 +436,11 @@ export class ProfileService {
             });
           }
         }
-
-        const updatedProfileWithRelations =
-          await prisma.userProfiles.findUnique({
-            where: { userId },
-            include: {
-              user: {
-                select: {
-                  userSkills: true,
-                  userLanguages: true,
-                  documents: true,
-                },
-              },
-            },
-          });
-
-        const pct = this.calculateCompletionPct(updatedProfileWithRelations!);
-        const isCore = this.isCoreFieldsComplete(updatedProfileWithRelations!);
-
-        await prisma.userProfiles.update({
-          where: { userId },
-          data: {
-            completionPct: pct,
-            isDraft: !isCore,
-          },
-        });
       },
       { timeout: 30000 },
     );
-
-    return this.getProfileWithDetails(userId);
+    // Single final read to return the fully-shaped response
+    const result = await this.getProfileWithDetails(userId);
+    return result;
   }
 }

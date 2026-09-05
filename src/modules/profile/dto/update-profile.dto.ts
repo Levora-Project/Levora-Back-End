@@ -103,6 +103,7 @@ export class UpdateProfileDto {
   @ApiPropertyOptional({ type: [SkillDto] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => SkillDto)
   skills?: SkillDto[];
@@ -110,6 +111,7 @@ export class UpdateProfileDto {
   @ApiPropertyOptional({ type: [LanguageDto] })
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(5)
   @ValidateNested({ each: true })
   @Type(() => LanguageDto)
   languages?: LanguageDto[];

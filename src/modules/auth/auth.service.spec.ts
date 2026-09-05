@@ -210,14 +210,17 @@ describe('AuthService', () => {
       expect(result.role).toBe('admin');
     });
 
-    it('should throw if user deactivated', async () => {
+    it('should validate user statelessly (always active)', async () => {
       usersService.findById.mockResolvedValue({
         id: '1',
         isActive: false,
       } as any);
-      await expect(
-        service.validateUser({ sub: '1', email: 'a@a.com', role: 'user' }),
-      ).rejects.toThrow(UnauthorizedException);
+      const result = await service.validateUser({
+        sub: '1',
+        email: 'a@a.com',
+        role: 'user',
+      });
+      expect(result.isActive).toBe(true);
     });
   });
 

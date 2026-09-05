@@ -17,6 +17,7 @@ import {
   securityConfig,
   uploadConfig,
   oauthConfig,
+  storageConfig,
 } from '@config/index';
 import { PrismaModule } from '@/prisma';
 import { RedisModule } from '@/redis';
@@ -40,6 +41,7 @@ import { ProfileModule } from './modules/profile/profile.module';
         securityConfig,
         uploadConfig,
         oauthConfig,
+        storageConfig,
       ],
       envFilePath: ['.env.local', '.env'],
     }),

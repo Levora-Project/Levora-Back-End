@@ -2,6 +2,7 @@ import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { StorageService } from '../interfaces/storage.interface';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -60,9 +61,17 @@ export class LocalStorageService implements StorageService {
   }
 
   getSignedUrl(key: string, expiresIn: number): Promise<string> {
-    const token = Buffer.from(
-      JSON.stringify({ key, exp: Date.now() + expiresIn * 1000 }),
-    ).toString('base64');
-    return Promise.resolve(`/local-storage/${key}?token=${token}`);
+    const payload = JSON.stringify({ key, exp: Date.now() + expiresIn * 1000 });
+    const secret = this.configService.get<string>(
+      'storage.encryption.key',
+    ) as string;
+    const signature = crypto
+      .createHmac('sha256', secret)
+      .update(payload)
+      .digest('hex');
+    const token = Buffer.from(JSON.stringify({ payload, signature })).toString(
+      'base64',
+    );
+    return Promise.resolve(`/api/v1/local-storage/${key}?token=${token}`);
   }
 }

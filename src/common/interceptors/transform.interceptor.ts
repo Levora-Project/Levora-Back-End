@@ -104,37 +104,52 @@ export class TransformInterceptor implements NestInterceptor {
         const message =
           customMessage || getAutoMessage(request.method, statusCode);
 
-        if (isPaginated(responseData)) {
+        const isAlreadyWrapped =
+          responseData !== null &&
+          typeof responseData === 'object' &&
+          'statusCode' in responseData &&
+          'data' in responseData;
+
+        const wrappedResponse = isAlreadyWrapped
+          ? (responseData as { data: unknown; message?: string })
+          : null;
+
+        const finalData = wrappedResponse ? wrappedResponse.data : responseData;
+        const finalMessage =
+          wrappedResponse?.message &&
+          typeof wrappedResponse.message === 'string'
+            ? wrappedResponse.message
+            : message;
+
+        if (isPaginated(finalData)) {
           const { data, total, page, limit, totalPages, hasNext, hasPrev } =
-            responseData;
+            finalData;
           return {
-            success: true,
-            status: statusCode,
-            message,
+            statusCode,
+            message: finalMessage,
             data,
             meta: {
               pagination: { page, limit, total, totalPages, hasNext, hasPrev },
               ...requestIdMeta,
               ...(deprecationMeta ? { deprecation: deprecationMeta } : {}),
             },
-            errors: null,
             timestamp,
           };
         }
 
+        const meta =
+          requestIdMeta || deprecationMeta
+            ? {
+                ...requestIdMeta,
+                ...(deprecationMeta ? { deprecation: deprecationMeta } : {}),
+              }
+            : undefined;
+
         return {
-          success: true,
-          status: statusCode,
-          message,
-          data: responseData,
-          meta:
-            requestIdMeta || deprecationMeta
-              ? {
-                  ...requestIdMeta,
-                  ...(deprecationMeta ? { deprecation: deprecationMeta } : {}),
-                }
-              : null,
-          errors: null,
+          statusCode,
+          message: finalMessage,
+          data: finalData,
+          ...(meta ? { meta } : {}),
           timestamp,
         };
       }),

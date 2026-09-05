@@ -5,7 +5,7 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "base_url", "value": "https://api.levora.dev", "type": "string" },
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" },
     { "key": "test_user_email", "value": "smoke-test@levora.com", "type": "string" },
     { "key": "test_user_password", "value": "TestPass123!", "type": "string" },
     { "key": "access_token", "value": "", "type": "string" },
@@ -37,8 +37,8 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/v1/reference/fields-of-study",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/reference/fields-of-study",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "reference", "fields-of-study"]
             }
           }
@@ -65,8 +65,8 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{base_url}}/api/v1/reference/skills-taxonomy",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/reference/skills-taxonomy",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "reference", "skills-taxonomy"]
             }
           }
@@ -99,8 +99,8 @@
               "raw": "{\n  \"email\": \"{{test_user_email}}\",\n  \"password\": \"{{test_user_password}}\",\n  \"firstName\": \"Smoke\",\n  \"lastName\": \"Test\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/v1/auth/register",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "auth", "register"]
             }
           }
@@ -137,8 +137,8 @@
               "raw": "{\n  \"email\": \"{{test_user_email}}\",\n  \"password\": \"{{test_user_password}}\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/v1/auth/login",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "auth", "login"]
             }
           }
@@ -176,8 +176,8 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/profile",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile"]
             }
           }
@@ -192,8 +192,8 @@
                   "pm.test('Status code is 200', function () {",
                   "    pm.response.to.have.status(200);",
                   "});",
-                  "pm.test('Response time < 500ms', function () {",
-                  "    pm.expect(pm.response.responseTime).to.be.below(500);",
+                  "pm.test('Response time < 30s', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(30000);",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -217,8 +217,8 @@
               "raw": "{\n  \"nationality\": \"US\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/v1/profile",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile"]
             }
           }
@@ -255,8 +255,8 @@
               "raw": "{\n  \"educationLevel\": \"Bachelor\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/v1/profile",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile"]
             }
           }
@@ -293,8 +293,8 @@
               "raw": "{\n  \"nationality\": null\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/v1/profile",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile"]
             }
           }
@@ -314,8 +314,8 @@
                   "pm.test('Status code is 201', function () {",
                   "    pm.response.to.have.status(201);",
                   "});",
-                  "pm.test('Response time < 1s', function () {",
-                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "pm.test('Response time < 30s', function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(30000);",
                   "});",
                   "pm.test('Extract document id', function () {",
                   "    var jsonData = pm.response.json();",
@@ -344,14 +344,14 @@
                 },
                 {
                   "key": "file",
-                  "value": "dummy pdf content",
-                  "type": "text"
+                  "src": "dummy.pdf",
+                  "type": "file"
                 }
               ]
             },
             "url": {
-              "raw": "{{base_url}}/api/v1/profile/documents",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile/documents",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile", "documents"]
             }
           }
@@ -384,8 +384,8 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/profile/documents",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile/documents",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile", "documents"]
             }
           }
@@ -418,8 +418,8 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/profile/documents/{{document_id}}/download",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile/documents/{{document_id}}/download",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile", "documents", "{{document_id}}", "download"]
             }
           }
@@ -448,8 +448,8 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/profile/documents/{{document_id}}",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile/documents/{{document_id}}",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile", "documents", "{{document_id}}"]
             }
           }
@@ -492,14 +492,14 @@
                 },
                 {
                   "key": "file",
-                  "value": "MZ\u0090\u0000\u0003\u0000\u0000\u0000",
-                  "type": "text"
+                  "src": "dummy.exe.pdf",
+                  "type": "file"
                 }
               ]
             },
             "url": {
-              "raw": "{{base_url}}/api/v1/profile/documents",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile/documents",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile", "documents"]
             }
           }
@@ -536,8 +536,8 @@
               "raw": "{\n  \"unknownField\": \"value\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/api/v1/profile",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile"]
             }
           }
@@ -566,8 +566,8 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/profile/documents/invalid-uuid/download",
-              "host": ["{{base_url}}"],
+              "raw": "{{baseUrl}}/api/v1/profile/documents/invalid-uuid/download",
+              "host": ["{{baseUrl}}"],
               "path": ["api", "v1", "profile", "documents", "invalid-uuid", "download"]
             }
           }

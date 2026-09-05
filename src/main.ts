@@ -5,7 +5,7 @@ import {
   ValidationPipe,
   VersioningType,
   Logger,
-  UnprocessableEntityException,
+  BadRequestException,
 } from '@nestjs/common';
 import { ValidationError } from 'class-validator';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -96,7 +96,7 @@ async function bootstrap() {
             message: (err.constraints ?? {})[constraintKey],
           })),
         );
-        return new UnprocessableEntityException({
+        return new BadRequestException({
           message: 'Validation failed',
           errors: errList,
         });

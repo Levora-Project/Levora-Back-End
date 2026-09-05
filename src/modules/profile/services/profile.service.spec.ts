@@ -203,11 +203,26 @@ describe('ProfileService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('should throw BadRequestException if gpaScale provided without gpaValue', async () => {
-      mockPrisma.userProfiles.findUnique.mockResolvedValue({ userId: '1' });
-      await expect(
-        service.updateProfile('1', { gpaScale: '4.0' }),
-      ).rejects.toThrow(BadRequestException);
+    it('should clear GPA value if gpaScale provided without gpaValue', async () => {
+      mockPrisma.userProfiles.findUnique.mockResolvedValue({
+        userId: '1',
+        user: {
+          userEducations: [],
+          userSkills: [],
+          userLanguages: [],
+          documents: [],
+        },
+      });
+      mockPrisma.userEducations.findMany.mockResolvedValue([{ id: 'ed1' }]);
+      await service.updateProfile('1', { gpaScale: '4.0' });
+      expect(mockPrisma.userEducations.update).toHaveBeenCalledWith({
+        where: { id: 'ed1' },
+        data: {
+          gpaRaw: null,
+          gpaRawScale: 4.0,
+          gpaNormalized4: null,
+        },
+      });
     });
 
     it('should throw BadRequestException if clearing required fields', async () => {
@@ -237,7 +252,11 @@ describe('ProfileService', () => {
       await service.updateProfile('1', { nationality: 'CA' });
       expect(mockPrisma.userProfiles.update).toHaveBeenCalledWith({
         where: { userId: '1' },
-        data: { nationality: 'CA' },
+        data: expect.objectContaining({
+          nationality: 'CA',
+          completionPct: expect.any(Number),
+          isDraft: expect.any(Boolean),
+        }),
       });
     });
 

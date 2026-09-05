@@ -709,7 +709,7 @@ Implement document endpoints.
 1. Create `src/modules/profile/controllers/documents.controller.ts`.
 2. Implement `POST /profile/documents`:
    - Use `@UseInterceptors(FileInterceptor('file'))`.
-   - Extract `documentType` from body.
+   - Extract `docType` from body.
    - Call `DocumentsService.uploadDocument`.
    - Return 201 with document metadata.
 3. Implement `GET /profile/documents/:id/download`:

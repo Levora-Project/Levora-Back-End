@@ -1144,7 +1144,7 @@
                       "description": "File to upload (PDF, DOC, DOCX, PNG, JPG - max 5MB)"
                     },
                     {
-                      "key": "documentType",
+                      "key": "docType",
                       "value": "resume",
                       "type": "text",
                       "description": "One of: resume, essay, transcript, recommendation_letter, other"

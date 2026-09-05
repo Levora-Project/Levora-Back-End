@@ -57,10 +57,38 @@ export function normalizeGPA(
   }
 
   if (scale === 'percentage') {
-    // Standard mapping: (percentage / 100) * 4.0
     const num = Number(value);
-    const normalized = (num / 100) * 4.0;
-    return Math.round(normalized * 10) / 10;
+    if (num >= 93) {
+      return 4.0;
+    }
+    if (num >= 90) {
+      return 3.7;
+    }
+    if (num >= 87) {
+      return 3.3;
+    }
+    if (num >= 83) {
+      return 3.0;
+    }
+    if (num >= 80) {
+      return 2.7;
+    }
+    if (num >= 77) {
+      return 2.3;
+    }
+    if (num >= 73) {
+      return 2.0;
+    }
+    if (num >= 70) {
+      return 1.7;
+    }
+    if (num >= 67) {
+      return 1.3;
+    }
+    if (num >= 60) {
+      return 1.0;
+    }
+    return 0.0;
   }
 
   throw new Error('Unsupported scale');

@@ -177,7 +177,7 @@ describe('ProfileModule (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/profile/documents')
         .set('Authorization', `Bearer ${userToken}`)
-        .field('documentType', 'resume')
+        .field('docType', 'resume')
         .attach('file', Buffer.from('%PDF-1.4\n%âãÏÓ\ndummy pdf content'), {
           filename: 'resume.pdf',
           contentType: 'application/pdf',
@@ -196,7 +196,7 @@ describe('ProfileModule (e2e)', () => {
       await request(app.getHttpServer())
         .post('/api/v1/profile/documents')
         .set('Authorization', `Bearer ${userToken}`)
-        .field('documentType', 'resume')
+        .field('docType', 'resume')
         // Sending a text file masquerading as a pdf
         .attach('file', Buffer.from('dummy content'), 'malware.php.pdf')
         // In real environments, Multer or magic bytes validation will catch this.
@@ -212,7 +212,7 @@ describe('ProfileModule (e2e)', () => {
       const res = await request(app.getHttpServer())
         .post('/api/v1/profile/documents')
         .set('Authorization', `Bearer ${userToken}`)
-        .field('documentType', 'resume')
+        .field('docType', 'resume')
         .attach('file', Buffer.from('%PDF-1.4\ndummy'), 'doc.pdf');
 
       const user1DocId = res.body.data.id;

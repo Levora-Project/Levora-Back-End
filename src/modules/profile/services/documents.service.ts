@@ -23,9 +23,9 @@ export class DocumentsService {
     private configService: ConfigService,
     @Inject(STORAGE_SERVICE) private storageService: StorageService,
   ) {
-    this.encryptionKey =
-      this.configService.get<string>('storage.encryption.key') ||
-      '0000000000000000000000000000000000000000000000000000000000000000';
+    this.encryptionKey = this.configService.get<string>(
+      'storage.encryption.key',
+    ) as string;
     this.maxDocuments =
       this.configService.get<number>('storage.limits.maxDocuments') || 20;
     this.signedUrlExpires =
@@ -112,8 +112,22 @@ export class DocumentsService {
 
   async deleteDocument(userId: string, documentId: string) {
     const doc = await this.verifyOwnership(userId, documentId);
-    await this.storageService.delete(doc.storagePath);
-    await this.prisma.documents.delete({ where: { id: documentId } });
+
+    // Hard delete in DB first. If this fails, storage is untouched.
+    await this.prisma.documents.delete({
+      where: { id: documentId },
+    });
+
+    // Then delete from storage. If this fails, the file is orphaned but inaccessible via API.
+    try {
+      await this.storageService.delete(doc.storagePath);
+    } catch (error) {
+      // In a real production app, you might want to use a Logger service here
+      console.error(
+        `Failed to delete document from storage: ${doc.storagePath}`,
+        error,
+      );
+    }
   }
 
   async getDocuments(userId: string) {

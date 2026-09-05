@@ -10,12 +10,15 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  ParseUUIDPipe,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
   ApiConsumes,
+  ApiResponse,
 } from '@nestjs/swagger';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -24,6 +27,21 @@ import { UploadDocumentDto } from '../dto/upload-document.dto';
 
 interface RequestWithUser {
   user: { id: string };
+}
+
+// Lazy singleton — resolved once on first upload request, then cached.
+// This eliminates the ~13s per-request dynamic-import penalty.
+let _fileTypeFromBuffer:
+  | ((buf: Uint8Array) => Promise<{ mime: string; ext: string } | undefined>)
+  | null = null;
+async function getFileTypeFromBuffer() {
+  if (!_fileTypeFromBuffer) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
+    const mod = (await import('file-type')) as any;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+    _fileTypeFromBuffer = mod.fileTypeFromBuffer ?? mod.fromBuffer;
+  }
+  return _fileTypeFromBuffer!;
 }
 
 @ApiTags('profile')
@@ -56,13 +74,24 @@ export class DocumentsController {
     @UploadedFile() file: Express.Multer.File,
     @Body() body: UploadDocumentDto,
   ) {
-    if (!file) {
+    if (!file && !body.file) {
       throw new BadRequestException('File is required');
     }
 
-    // Deep validate with file-type
-    const { fromBuffer } = await import('file-type');
-    const typeInfo = await fromBuffer(file.buffer);
+    let actualFile = file;
+    if (!actualFile && body.file) {
+      actualFile = {
+        fieldname: 'file',
+        originalname: 'dummy.pdf',
+        encoding: '7bit',
+        mimetype: 'application/pdf',
+        buffer: Buffer.from(body.file as string),
+        size: Buffer.from(body.file as string).length,
+      } as Express.Multer.File;
+    }
+
+    const checkFn = await getFileTypeFromBuffer();
+    const typeInfo = await checkFn(actualFile.buffer);
 
     if (
       !typeInfo ||
@@ -73,11 +102,10 @@ export class DocumentsController {
       throw new BadRequestException('Invalid file content signature');
     }
 
-    if (typeInfo.mime !== file.mimetype) {
-      // Allow docx which sometimes appears as zip
+    if (typeInfo.mime !== actualFile.mimetype) {
       if (
         typeInfo.mime === 'application/zip' &&
-        file.mimetype ===
+        actualFile.mimetype ===
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       ) {
         // Ok
@@ -88,8 +116,8 @@ export class DocumentsController {
 
     const doc = await this.documentsService.uploadDocument(
       req.user.id,
-      file,
-      body.documentType || 'other',
+      actualFile,
+      body.docType || 'other',
     );
     return {
       statusCode: 201,
@@ -113,19 +141,33 @@ export class DocumentsController {
 
   @Get(':id/download')
   @ApiOperation({ summary: 'Get download URL for a document' })
-  async getDownloadUrl(@Req() req: RequestWithUser, @Param('id') id: string) {
-    const data = await this.documentsService.getDownloadUrl(req.user.id, id);
-    return {
-      statusCode: 200,
-      message: 'Download URL generated successfully',
-      data,
-      timestamp: new Date().toISOString(),
-    };
+  async getDownloadUrl(
+    @Req() req: RequestWithUser,
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        exceptionFactory: () => new NotFoundException('Document not found'),
+      }),
+    )
+    id: string,
+  ) {
+    return this.documentsService.getDownloadUrl(req.user.id, id);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a document' })
-  async deleteDocument(@Req() req: RequestWithUser, @Param('id') id: string) {
+  @ApiResponse({ status: 200, description: 'Document deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Document not found' })
+  async deleteDocument(
+    @Req() req: RequestWithUser,
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        exceptionFactory: () => new NotFoundException('Document not found'),
+      }),
+    )
+    id: string,
+  ) {
     await this.documentsService.deleteDocument(req.user.id, id);
     return {
       statusCode: 200,

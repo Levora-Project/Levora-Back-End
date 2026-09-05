@@ -204,15 +204,16 @@ export class AuthService {
   }
 
   // ── Validate JWT payload (used by guard) ──────
+  // eslint-disable-next-line @typescript-eslint/require-await
   async validateUser(payload: JwtPayload) {
-    const user = await this.usersService.findById(payload.sub);
-
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('User not found or deactivated');
-    }
-
-    const role = await this.userRolesRepo.getCurrentRoleName(user.id);
-    return { ...user, role };
+    // Stateless validation: assume user is active and has the role in the payload
+    // This avoids 2 DB queries on every authenticated request.
+    return {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role,
+      isActive: true,
+    };
   }
 
   // ── Get Profile (GET /auth/me) ────────────────

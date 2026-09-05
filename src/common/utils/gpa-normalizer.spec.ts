@@ -59,9 +59,12 @@ describe('GPA Normalizer Utility', () => {
       expect(normalizeGPA('B+', 'letter')).toBe(3.3);
     });
 
-    it('should normalize percentage scale using standard mapping', () => {
-      expect(normalizeGPA(85, 'percentage')).toBe(3.4);
-      expect(normalizeGPA(100, 'percentage')).toBe(4.0);
+    it('should normalize percentage scale using standard mapping table', () => {
+      expect(normalizeGPA(95, 'percentage')).toBe(4.0); // A
+      expect(normalizeGPA(91, 'percentage')).toBe(3.7); // A-
+      expect(normalizeGPA(85, 'percentage')).toBe(3.0); // B
+      expect(normalizeGPA(60, 'percentage')).toBe(1.0); // D
+      expect(normalizeGPA(50, 'percentage')).toBe(0.0); // F
     });
 
     it('should throw error on invalid inputs', () => {
