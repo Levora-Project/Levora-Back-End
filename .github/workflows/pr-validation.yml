@@ -443,7 +443,7 @@ jobs:
           echo "Running Newman tests against: $PREVIEW_URL/api/v1"
 
           newman run tests/levora-smoke-tests.json \
-            --env-var baseUrl="$PREVIEW_URL/api/v1" \
+            --env-var baseUrl="$PREVIEW_URL" \
             --reporters cli,json \
             --reporter-json-export newman-report.json
 

@@ -317,7 +317,7 @@ Authorization: Bearer <token>
 Content-Type: multipart/form-data
 
 file: [binary file]
-documentType: resume
+docType: resume
 ```
 
 **Response (201):**

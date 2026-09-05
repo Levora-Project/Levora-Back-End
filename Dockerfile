@@ -41,8 +41,8 @@ COPY --from=build --chown=nestjs:nodejs /app/dist ./dist
 COPY --from=build --chown=nestjs:nodejs /app/prisma ./prisma
 COPY --chown=nestjs:nodejs package.json ./
 
-# Create logs directory (will be fixed by entrypoint if volume mounted)
-RUN mkdir -p logs && chown -R nestjs:nodejs logs
+# Create logs and uploads directory (will be fixed by entrypoint if volume mounted)
+RUN mkdir -p logs uploads && chown -R nestjs:nodejs logs uploads
 
 # Copy entrypoint script
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/

@@ -9,6 +9,7 @@ set -e
 # ============================================
 
 LOGS_DIR="/app/logs"
+UPLOADS_DIR="/app/uploads"
 APP_USER="nestjs"
 APP_UID=1001
 APP_GID=1001
@@ -20,16 +21,16 @@ npx prisma migrate deploy
 echo "Running Prisma seed..."
 npx prisma db seed
 
-# Fix logs directory permissions (runs as root initially)
+# Fix directories permissions (runs as root initially)
 if [ "$(id -u)" = "0" ]; then
-  # Create logs directory if not exists
-  mkdir -p "$LOGS_DIR"
+  # Create directories if not exists
+  mkdir -p "$LOGS_DIR" "$UPLOADS_DIR"
 
   # Fix ownership (works even with volume mount)
-  chown -R "$APP_UID:$APP_GID" "$LOGS_DIR"
-  chmod 755 "$LOGS_DIR"
+  chown -R "$APP_UID:$APP_GID" "$LOGS_DIR" "$UPLOADS_DIR"
+  chmod 755 "$LOGS_DIR" "$UPLOADS_DIR"
 
-  echo "[entrypoint] Logs directory ready: $LOGS_DIR"
+  echo "[entrypoint] Logs and uploads directories ready"
 
   # Drop privileges and run as nestjs user
   exec su-exec "$APP_USER" "$@"

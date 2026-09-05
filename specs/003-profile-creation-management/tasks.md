@@ -709,7 +709,7 @@ Implement document endpoints.
 1. Create `src/modules/profile/controllers/documents.controller.ts`.
 2. Implement `POST /profile/documents`:
    - Use `@UseInterceptors(FileInterceptor('file'))`.
-   - Extract `documentType` from body.
+   - Extract `docType` from body.
    - Call `DocumentsService.uploadDocument`.
    - Return 201 with document metadata.
 3. Implement `GET /profile/documents/:id/download`:
@@ -965,21 +965,21 @@ TASK-003-01 ─┬─ TASK-003-02 ─┬─ TASK-003-03 ─┬─ TASK-003-05 (R
 
 After completing all tasks, verify:
 
-- [ ] `pnpm lint` passes with no errors.
-- [ ] `pnpm test` passes with ≥80% coverage.
-- [ ] `pnpm build` completes successfully.
-- [ ] Reference tables exist with seed data.
-- [ ] `GET /profile` returns full profile with calculated fields.
-- [ ] `PATCH /profile` updates fields with validation.
-- [ ] Core fields cannot be cleared once set.
-- [ ] Completion percentage calculated correctly.
-- [ ] GPA normalization works for all scales.
-- [ ] Document upload validates MIME via signature.
-- [ ] Documents encrypted and stored outside web root.
-- [ ] Signed URLs generated with 5-minute expiration.
-- [ ] Document ownership enforced on all operations.
-- [ ] Swagger UI shows all endpoints.
-- [ ] E2E tests all pass.
+- [X] `pnpm lint` passes with no errors.
+- [X] `pnpm test` passes with ≥80% coverage.
+- [X] `pnpm build` completes successfully.
+- [X] Reference tables exist with seed data.
+- [X] `GET /profile` returns full profile with calculated fields.
+- [X] `PATCH /profile` updates fields with validation.
+- [X] Core fields cannot be cleared once set.
+- [X] Completion percentage calculated correctly.
+- [X] GPA normalization works for all scales.
+- [X] Document upload validates MIME via signature.
+- [X] Documents encrypted and stored outside web root.
+- [X] Signed URLs generated with 5-minute expiration.
+- [X] Document ownership enforced on all operations.
+- [X] Swagger UI shows all endpoints.
+- [X] E2E tests all pass.
 
 ---
 

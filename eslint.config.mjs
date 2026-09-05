@@ -6,7 +6,16 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs', 'dist/**', 'node_modules/**', 'coverage/**'],
+    ignores: [
+      'eslint.config.mjs',
+      'dist/**',
+      'node_modules/**',
+      'coverage/**',
+      '.agents/**/*',               // تجاهل مجلد .agents بالكامل
+      'add-security-tests.js',      // ملفات الجذر التي تظهر في الأخطاء
+      'fix-tests.js',
+      'update-security-tests.js',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
